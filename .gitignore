@@ -1,0 +1,23 @@
+### CoreOS-Sim - .gitignore ###
+
+# Ejecutables finales
+coreos_sim
+*.out
+*.exe
+
+# Archivos objeto y temporales de compilación
+*.o
+*.obj
+*.a
+*.lib
+
+# Directorio de configuración de VS Code
+.vscode/
+
+# Archivos temporales del sistema y editores
+*.swp
+*~
+.DS_Store
+
+# Documentación externa
+
