@@ -8,11 +8,21 @@ bool system_running = true;
 int main() {
     std::cout << "Iniciando CoreOS-Sim..." << std::endl;
 
-    // TODO: Inicializar hilos de las fases industriales para el Paso 1
-    // (Aquí es van a crear los hilos de la planta)
+    // Lanzar el hilo de la Planta de Carbón (Módulo 1)
+    std::thread hilo_carbon(Industrial::fase_planta_carbon);
 
-    // TODO: Asegurar el cierre correcto de los hilos con .join()
-    // (Aquí esperaremos que los hilos terminen antes de que muera el main)
+    // Simular tiempo de ejecución del sistema para validar concurrencia
+    std::cout << "[Main] Sistema operando. Esperando 10 segundos..." << std::endl;
+    std::this_thread::sleep_for(std::chrono::seconds(10));
+
+    // Desactivar el sistema
+    std::cout << "[Main] Apagando sistema..." << std::endl;
+    system_running = false;
+
+    // Asegurar el cierre correcto del hilo gestor
+    if (hilo_carbon.joinable()) {
+        hilo_carbon.join();
+    }
 
     std::cout << "Sistema finalizado." << std::endl;
     return 0;
