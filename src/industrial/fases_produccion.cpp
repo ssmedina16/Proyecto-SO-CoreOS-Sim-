@@ -19,9 +19,13 @@ void Hilo_Mezcladora() {
         std::cout << "[Mezcladora] Recibiendo materias primas (coque y brea)..." << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(800)); // Simulación de carga
         
+        if (!system_running) break;
+
         std::cout << "[Mezcladora] Mezclando componentes a alta temperatura..." << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(1500)); // Simulación de mezclado
         
+        if (!system_running) break;
+
         std::cout << "[Mezcladora] Mezcla lista. Transfiriendo masa anódica al Horno." << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
@@ -45,6 +49,8 @@ void Hilo_Horno() {
         // Simulación de cocción (delay más largo para representar proceso térmico)
         std::this_thread::sleep_for(std::chrono::seconds(3));
         
+        if (!system_running) break;
+
         std::cout << "[Horno] Ciclo completado. Ánodos verdes listos para transporte." << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
