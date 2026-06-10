@@ -4,6 +4,7 @@
 coreos_sim
 *.out
 *.exe
+build/
 
 # Archivos objeto y temporales de compilación
 *.o
