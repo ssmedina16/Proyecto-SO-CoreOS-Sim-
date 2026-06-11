@@ -4,10 +4,19 @@
 namespace Industrial
 {
     // Fase 1: Planta de Carbón
-    void fase_planta_carbon();
+    //------------------------------------------------------------
+    struct EstadoPlanta
+    {
+        int pid_proceso;
+        float coque_kg;           // Materia prima 1
+        float brea_kg;            // Materia prima 2
+        int anodos_producidos;    // Producto terminado para Fase 3
+    };
 
-    // Fase 2: Sistema de Logística
-    void fase_logistica_transporte();
+    void fase_planta_carbon();
+    void Hilo_Mezcladora(EstadoPlanta &estado);
+    void Hilo_Horno(EstadoPlanta &estado);
+    //------------------------------------------------------------
 
     // Fase 3: Celdas de Reducción
     //------------------------------------------------------------
@@ -23,12 +32,6 @@ namespace Industrial
     void fase_celdas_reduccion(int cantidad_celdas);
     void Hilo_Celda(EstadoCelda &mi_estado);
     //--------------------------------------------------------------
-
-    // Fase 4: Reciclaje GTC
-    void fase_reciclaje_gtc();
-
-    // Fase 5: Trasiego del Crisol
-    void fase_trasiego_crisol();
 }
 
 #endif
