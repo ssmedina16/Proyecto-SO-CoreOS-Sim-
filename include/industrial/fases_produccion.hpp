@@ -18,6 +18,9 @@ namespace Industrial
     void Hilo_Horno(EstadoPlanta &estado);
     //------------------------------------------------------------
 
+    // Fase 2: Sistema de Logística
+   // void fase_logistica_transporte();
+
     // Fase 3: Celdas de Reducción
     //------------------------------------------------------------
     struct EstadoCelda
@@ -32,6 +35,12 @@ namespace Industrial
     void fase_celdas_reduccion(int cantidad_celdas);
     void Hilo_Celda(EstadoCelda &mi_estado);
     //--------------------------------------------------------------
+
+    // Fase 4: Reciclaje GTC
+    //void fase_reciclaje_gtc();
+
+    // Fase 5: Trasiego del Crisol
+   // void fase_trasiego_crisol();
 }
 
 #endif
