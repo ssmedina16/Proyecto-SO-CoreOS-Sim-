@@ -3,88 +3,75 @@
 #include <thread>
 #include <chrono>
 #include <vector>
+#include <signal.h>
+#include <unistd.h>  // Para getpid()
+#include <cstdlib>   // Para std::exit()
 
-// Referencia a la variable global de control definida en main.cpp
-extern bool system_running;
-
-// --- FUNCIONES INTERNAS DE SIMULACIÓN (TRABAJADORES CONCURRENTES) ---
+// 1. MANEJO DE SEÑALES ATÓMICAS: Declaración externa segura para IPC
+extern volatile sig_atomic_t system_running;
 
 /**
- * Hilo_Mezcladora: Simula la recepción de coque y brea, y el proceso de mezclado.
+ * 2. FLUJO SECUENCIAL DE RELOJ INDUSTRIAL: Sub-etapa Mezcladora
+ * Simula la carga de materias primas (coque y brea) con retardo de 800ms.
  */
-void Hilo_Mezcladora() {
-    std::cout << "[Planta Carbón] Mezcladora iniciada." << std::endl;
-    
-    while (system_running) {
-        std::cout << "[Mezcladora] Recibiendo materias primas (coque y brea)..." << std::endl;
-        std::this_thread::sleep_for(std::chrono::milliseconds(800)); // Simulación de carga
-        
-        if (!system_running) break;
+void ejecutar_ciclo_mezcladora() {
+    if (!system_running) return;
 
-        std::cout << "[Mezcladora] Mezclando componentes a alta temperatura..." << std::endl;
-        std::this_thread::sleep_for(std::chrono::milliseconds(1500)); // Simulación de mezclado
-        
-        if (!system_running) break;
-
-        std::cout << "[Mezcladora] Mezcla lista. Transfiriendo masa anódica al Horno." << std::endl;
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    }
+    std::cout << "[Mezcladora - PID: " << getpid() << "] Recibiendo materias primas (coque y brea)..." << std::endl;
+    std::this_thread::sleep_for(std::chrono::milliseconds(800));
     
-    std::cout << "[Planta Carbón] Mezcladora finalizada." << std::endl;
+    // Guarda de estado inmediata tras delay
+    if (!system_running) return;
+
+    std::cout << "[Mezcladora - PID: " << getpid() << "] Masa anódica preparada." << std::endl;
 }
 
 /**
- * Hilo_Horno: Simula el ciclo térmico de cocción de los ánodos.
+ * 2. FLUJO SECUENCIAL DE RELOJ INDUSTRIAL: Sub-etapa Horno
+ * Simula el ciclo térmico de cocción con retardo de 3000ms.
  */
-void Hilo_Horno() {
-    std::cout << "[Planta Carbón] Horno de Cocción iniciado." << std::endl;
-    
-    while (system_running) {
-        std::cout << "[Horno] Esperando carga de masa anódica..." << std::endl;
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-        
-        if (!system_running) break;
+void ejecutar_ciclo_horno() {
+    if (!system_running) return;
 
-        std::cout << "[Horno] Iniciando ciclo térmico de cocción..." << std::endl;
-        // Simulación de cocción (delay más largo para representar proceso térmico)
-        std::this_thread::sleep_for(std::chrono::seconds(3));
-        
-        if (!system_running) break;
-
-        std::cout << "[Horno] Ciclo completado. Ánodos verdes listos para transporte." << std::endl;
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    }
+    std::cout << "[Horno - PID: " << getpid() << "] Iniciando ciclo térmico de cocción (3s)..." << std::endl;
+    std::this_thread::sleep_for(std::chrono::milliseconds(3000));
     
-    std::cout << "[Planta Carbón] Horno finalizado." << std::endl;
+    // Guarda de estado inmediata tras delay
+    if (!system_running) return;
+
+    std::cout << "[Horno - PID: " << getpid() << "] Ciclo completado. Ánodos listos." << std::endl;
 }
 
 namespace Industrial {
 
     /**
-     * Módulo 1: Planta de Carbón (Hilo Gestor)
-     * Coordina la Mezcladora y el Horno en paralelo.
+     * Módulo 1: Planta de Carbón (Proceso Hijo)
+     * Ejecuta las sub-etapas de forma lineal dentro de su ciclo de vida.
      */
     void fase_planta_carbon() {
-        std::cout << "[Módulo 1] Iniciando Planta de Carbón (Hilo Gestor)..." << std::endl;
+        std::cout << "[Planta Carbón - PID: " << getpid() << "] Proceso iniciado correctamente." << std::endl;
 
-        // Lanzar hilos trabajadores concurrentes
-        std::thread worker_mezcladora(Hilo_Mezcladora);
-        std::thread worker_horno(Hilo_Horno);
+        // Bucle principal del proceso hijo
+        while (system_running) {
+            ejecutar_ciclo_mezcladora();
+            
+            if (!system_running) break;
 
-        // El gestor espera a que los hilos trabajadores terminen (cuando system_running sea false)
-        if (worker_mezcladora.joinable()) {
-            worker_mezcladora.join();
+            ejecutar_ciclo_horno();
+            
+            if (!system_running) break;
+
+            std::cout << "[Planta Carbón - PID: " << getpid() << "] Ciclo de producción finalizado. Reiniciando..." << std::endl;
         }
-        
-        if (worker_horno.joinable()) {
-            worker_horno.join();
-        }
 
-        std::cout << "[Módulo 1] Planta de Carbón apagada correctamente." << std::endl;
+        // 3. APAGADO LIMPIO: El proceso hijo debe terminar mediante exit(0)
+        std::cout << "[Planta Carbón - PID: " << getpid() << "] Finalizando proceso de forma segura..." << std::endl;
+        std::exit(0);
     }
 
-    // --- STUBS DE OTROS MÓDULOS 
-
+    /**
+     * 5. RESTRICCIÓN DE STUBS PARA COMPAÑEROS
+     */
     void fase_logistica_transporte() {
         // TODO: Asignado a otros compañeros
     }
