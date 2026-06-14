@@ -19,7 +19,7 @@ namespace Industrial
     //------------------------------------------------------------
 
     // Fase 2: Sistema de Logística
-   // void fase_logistica_transporte();
+    void fase_logistica_transporte();
 
     // Fase 3: Celdas de Reducción
     //------------------------------------------------------------
