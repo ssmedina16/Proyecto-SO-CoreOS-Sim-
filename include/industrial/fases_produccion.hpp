@@ -1,6 +1,8 @@
 #ifndef FASES_PRODUCCION_HPP
 #define FASES_PRODUCCION_HPP
 
+#include <mutex>
+
 namespace Industrial
 {
     // Fase 1: Planta de Carbón
@@ -40,7 +42,24 @@ namespace Industrial
     //void fase_reciclaje_gtc();
 
     // Fase 5: Trasiego del Crisol
-   // void fase_trasiego_crisol();
+    //--------------------------------------------------------------
+    struct EstadoCrisol
+    {
+        int id_crisol;
+        float capacidad_max = 6000.0f;       // Umbral crítico de succión (6 toneladas lógicas)
+        float aluminio_recolectado = 0.0f;   // Registro del material consolidado
+        bool en_operacion = false;           // Semáforo interno de ejecución
+    };
+
+    // Objeto Mutex global que restringe el acceso al canal físico de extracción
+    extern std::mutex mutex_crisol_succion;
+
+    // Proceso Global de Logística
+    void fase_trasiego_crisol(int cantidad_crisoles, EstadoCelda* celdas, int cantidad_celdas);
+    
+    // Unidad Ligera de Ejecución (Hilo del Crisol)
+    void Hilo_Crisol(EstadoCrisol &mi_estado, EstadoCelda* celdas, int cantidad_celdas);
+    //--------------------------------------------------------------
 }
 
 #endif

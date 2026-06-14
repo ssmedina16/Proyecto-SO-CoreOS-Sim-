@@ -7,6 +7,8 @@
 #include <unistd.h>
 #include <cstdlib>
 #include <mutex>
+#include <sys/ipc.h>
+#include <sys/shm.h>
 
 using namespace std;
 
@@ -52,19 +54,26 @@ namespace Industrial {
     void fase_celdas_reduccion(int cantidad_celdas) {
         signal(SIGTERM, recibir_signal_apagado_f3);
         
-        vector<thread> hilos;
-        vector<EstadoCelda> celdas(cantidad_celdas);
+        // Obtener el segmento de memoria compartida
+        key_t key = 12345;
+        int shmid = shmget(key, sizeof(EstadoCelda) * cantidad_celdas, 0666);
+        if (shmid < 0) {
+            cerr << "[Celdas Reducción - Error] No se pudo conectar a la memoria compartida." << endl;
+            exit(1);
+        }
+        EstadoCelda* celdas = (EstadoCelda*) shmat(shmid, nullptr, 0);
 
         cout << "\n>>> [PROCESO] INICIANDO FASE 3: CELDAS DE REDUCCIÓN - PID: " << getpid() << " <<<\n\n";
 
+        vector<thread> hilos;
         for (int i = 0; i < cantidad_celdas; ++i) {
-            celdas[i] = { i + 1, 958.0f, 1000.0f, 200.0f, 0.0f };
             hilos.push_back(thread(Hilo_Celda, ref(celdas[i])));
         }
 
         for (auto &h : hilos) if (h.joinable()) h.join();
 
         cout << "[Celdas Reducción] Proceso finalizado.\n";
+        shmdt(celdas);
         exit(0);
     }
 }
