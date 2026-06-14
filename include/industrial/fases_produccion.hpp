@@ -2,6 +2,7 @@
 #define FASES_PRODUCCION_HPP
 
 #include <mutex>
+#include <fstream>
 
 namespace Industrial
 {
@@ -39,7 +40,7 @@ namespace Industrial
     };
 
     void fase_celdas_reduccion(int cantidad_celdas);
-    void Hilo_Celda(EstadoCelda &mi_estado, InventarioAmbiental &env, std::mutex &mtx);
+    void Hilo_Celda(EstadoCelda &mi_estado, InventarioAmbiental &env, std::mutex &mtx, std::ofstream &log_file);
     //--------------------------------------------------------------
 
     // Fase 4: Reciclaje GTC
