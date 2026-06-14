@@ -24,7 +24,8 @@ void interceptar_apagado_padre(int sig)
 
 int main()
 {
-    std::cout << ">>> [KERNEL] INICIANDO COREOS-SIM (ARQUITECTURA MULTIPROCESO) <<<\n" << std::endl;
+    std::cout << ">>> [KERNEL] INICIANDO COREOS-SIM (ARQUITECTURA MULTIPROCESO) <<<\n"
+              << std::endl;
 
     // Configuración de señal para el padre
     signal(SIGTERM, interceptar_apagado_padre);
@@ -33,17 +34,19 @@ int main()
     // 1. LANZAMIENTO DE LA FASE 1: PLANTA DE CARBÓN (SANTIAGO)
     pid_t pid_plantaCarbon = fork();
 
-    if (pid_plantaCarbon == 0) {
+    if (pid_plantaCarbon == 0)
+    {
         // PROCESO HIJO: Planta de Carbón
         // El hijo configura sus propios handlers dentro de su .cpp
         Industrial::fase_planta_carbon();
-        return 0; 
+        return 0;
     }
 
     // 2. LANZAMIENTO DE LA FASE 3: CELDAS DE REDUCCIÓN (JP)
     pid_t pid_celdasElectroliticas = fork();
 
-    if (pid_celdasElectroliticas == 0) {
+    if (pid_celdasElectroliticas == 0)
+    {
         // PROCESO HIJO: Celdas de Reducción
         Industrial::fase_celdas_reduccion(5);
         return 0;
@@ -59,8 +62,10 @@ int main()
     cout << "\n[Kernel] Tiempo de simulación concluido. Enviando señales de apagado...\n";
 
     // Enviamos SIGTERM a los hijos para que sus handlers internos actúen de forma autónoma
-    if (pid_plantaCarbon > 0) kill(pid_plantaCarbon, SIGTERM);
-    if (pid_celdasElectroliticas > 0) kill(pid_celdasElectroliticas, SIGTERM);
+    if (pid_plantaCarbon > 0)
+        kill(pid_plantaCarbon, SIGTERM);
+    if (pid_celdasElectroliticas > 0)
+        kill(pid_celdasElectroliticas, SIGTERM);
 
     // Limpieza de procesos (evitar zombies)
     waitpid(pid_plantaCarbon, nullptr, 0);
