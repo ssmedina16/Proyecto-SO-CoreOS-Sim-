@@ -5,15 +5,11 @@
 #include <signal.h>   // Requerido para señales del SO (kill, SIGTERM)
 #include <sys/wait.h> // Requerido para waitpid()
 #include "../include/industrial/fases_produccion.hpp"
-// no IPC POSIX aquí; mantener includes mínimos
 
 using namespace std;
 
 // Variables de control globales (utilizadas principalmente por el Padre)
 volatile sig_atomic_t system_running = 1;
-
-// Inicialización de IPC para silo y tolvas
-// init_ipc_silo_tolvas removed per request; no shared silo/tolvas in main
 
 /**
  * Manejador genérico para el proceso padre (Kernel).
@@ -33,8 +29,6 @@ int main()
     // Configuración de señal para el padre
     signal(SIGTERM, interceptar_apagado_padre);
     signal(SIGINT, interceptar_apagado_padre);
-
-    // No se inicializa IPC POSIX; la Fase 2 opera de forma local/simulada
 
     // 1. LANZAMIENTO DE LA FASE 1: PLANTA DE CARBÓN (SANTIAGO)
     pid_t pid_plantaCarbon = fork();

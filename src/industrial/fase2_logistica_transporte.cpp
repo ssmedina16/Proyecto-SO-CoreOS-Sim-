@@ -32,7 +32,7 @@ namespace Industrial {
     void fase_logistica_transporte() {
         signal(SIGTERM, recibir_signal_apagado_f2);
 
-        cout << "\n>>> [PROCESO] INICIANDO FASE 2: LOGÍSTICA Y TRANSPORTE (SIMULADA) - PID: " << getpid() << " <<<\n\n";
+        cout << "\n>>> [PROCESO] INICIANDO FASE 2: LOGÍSTICA Y TRANSPORTE - PID: " << getpid() << " <<<\n\n";
 
         // Bucle principal iterativo (simula solicitudes y transferencias internamente)
         while (system_running) {
