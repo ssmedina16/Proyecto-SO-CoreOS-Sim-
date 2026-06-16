@@ -1,5 +1,6 @@
 #include "../../include/industrial/fases_produccion.hpp"
 #include <iostream>
+#include <fstream>
 #include <thread>
 #include <chrono>
 #include <vector>
@@ -32,6 +33,13 @@ namespace Industrial {
     void fase_logistica_transporte() {
         signal(SIGTERM, recibir_signal_apagado_f2);
 
+        std::ofstream log_file("logs/fase2_logistica.log", std::ios::out | std::ios::trunc);
+        if (!log_file.is_open()) {
+            std::cerr << "Critical Error: Could not create Phase 2 log file." << std::endl;
+            exit(1);
+        }
+        log_file << "=== INITIALIZATION OF LOGISTICAL LOG (PHASE 2) ===\n" << std::flush;
+
         cout << "\n>>> [PROCESO] INICIANDO FASE 2: LOGÍSTICA Y TRANSPORTE (SIMULADA) - PID: " << getpid() << " <<<\n\n";
 
         // Bucle principal iterativo (escaneo de tolvas globales)
@@ -47,9 +55,9 @@ namespace Industrial {
                         {
                             // proteger logs con mutex
                             lock_guard<mutex> lg(candado_logistica);
-                            cout << "[Logística] RELLENANDO Celda #" << (i + 1)
-                                 << " | Cantidad: " << cantidad_a_enviar << " kg | Silo Restante: " 
-                                 << SILO_ALUMINA_GLOBAL << " kg\n";
+                            log_file << "[Logística] RELLENANDO Celda #" << (i + 1)
+                                     << " | Cantidad: " << cantidad_a_enviar << " kg | Silo Restante: " 
+                                     << SILO_ALUMINA_GLOBAL << " kg\n" << std::flush;
                         }
 
                         // simular tiempo de transferencia neumática
@@ -62,7 +70,8 @@ namespace Industrial {
             this_thread::sleep_for(chrono::milliseconds(SLEEP_MS));
         }
 
-        cout << "[Logística] Finalizando proceso de logística.\n";
+        log_file << "[Logística] Finalizando proceso de logística.\n" << std::flush;
+        log_file.close();
         exit(0);
     }
 
