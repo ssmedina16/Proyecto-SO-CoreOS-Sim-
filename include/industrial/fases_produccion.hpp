@@ -59,7 +59,7 @@ namespace Industrial
     // Interconexión Fase 2 -> Fase 3 --- VARIABLES DE CONEXIÓN ENTRE PROCESOS ---
     inline float SILO_ALUMINA_GLOBAL = 50000.0f;
     inline const int MAX_CELDAS = 5;
-    // Las tolvas de las 5 celdas empezarán vacías (0.0f) para probar la conexión
+    // Las tolvas de las 5 celdas empezarán vacías para probar la conexión
     inline float TOLVAS_CELDAS_GLOBAL[MAX_CELDAS] = {400.0f, 400.0f, 400.0f, 400.0f, 400.0f};
 
     // Fase 5: Trasiego del Crisol
