@@ -36,6 +36,9 @@ namespace Industrial
     {
         while (system_running)
         {
+            // Sincronizar estado local con la tolva global
+            mi_estado.alumina_kg = TOLVAS_CELDAS_GLOBAL[mi_estado.id_celda - 1];
+
             float alumina_req = 200.0f;
             float anodo_req = 45.0f;
 
@@ -65,6 +68,9 @@ namespace Industrial
 
             if (produccion_ok)
             {
+                // Guardar el remanente de alúmina en la tolva global
+                TOLVAS_CELDAS_GLOBAL[mi_estado.id_celda - 1] = mi_estado.alumina_kg;
+
                 mi_estado.aluminio_producido += 100.0f;
 
                 // Generar gases
@@ -111,7 +117,7 @@ namespace Industrial
         // Lanzar Celdas
         for (int i = 0; i < cantidad_celdas; ++i)
         {
-            celdas[i] = {i + 1, 958.0f, 1000.0f, 200.0f, 0.0f};
+            celdas[i] = {i + 1, 958.0f, TOLVAS_CELDAS_GLOBAL[i], 200.0f, 0.0f};
             hilos.push_back(thread(Hilo_Celda, ref(celdas[i]), ref(inventario_ambiental), ref(candado_inventario), ref(log_file)));
         }
 

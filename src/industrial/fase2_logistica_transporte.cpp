@@ -34,57 +34,31 @@ namespace Industrial {
 
         cout << "\n>>> [PROCESO] INICIANDO FASE 2: LOGÍSTICA Y TRANSPORTE (SIMULADA) - PID: " << getpid() << " <<<\n\n";
 
-        // Bucle principal iterativo (simula solicitudes y transferencias internamente)
+        // Bucle principal iterativo (escaneo de tolvas globales)
         while (system_running) {
-            struct Solicitud { int id; int cantidad; };
-            Solicitud solicitudes[MAX_SOLICITUDES];
-            int solicitudes_count = 0;
+            for (int i = 0; i < MAX_CELDAS; ++i) {
+                if (TOLVAS_CELDAS_GLOBAL[i] < 500.0f) {
+                    float cantidad_a_enviar = 1000.0f - TOLVAS_CELDAS_GLOBAL[i];
 
-            // Generar solicitudes de ejemplo 
-            for (int i = 0; i < MAX_SOLICITUDES; ++i) {
-                // generar cantidades variadas 
-                solicitudes[i].id = i;
-                solicitudes[i].cantidad = 500 + (i * 300); // 500,800,1100,...
-                solicitudes_count++;
-            }
+                    if (SILO_ALUMINA_GLOBAL >= cantidad_a_enviar) {
+                        SILO_ALUMINA_GLOBAL -= cantidad_a_enviar;
+                        TOLVAS_CELDAS_GLOBAL[i] += cantidad_a_enviar;
 
-            // Orden SJF por cantidad ascendente (selection sort)
-            for (int i = 0; i < solicitudes_count - 1; ++i) {
-                int min_idx = i;
-                for (int j = i + 1; j < solicitudes_count; ++j) {
-                    if (solicitudes[j].cantidad < solicitudes[min_idx].cantidad) min_idx = j;
-                }
-                if (min_idx != i) {
-                    Solicitud tmp = solicitudes[i];
-                    solicitudes[i] = solicitudes[min_idx];
-                    solicitudes[min_idx] = tmp;
+                        {
+                            // proteger logs con mutex
+                            lock_guard<mutex> lg(candado_logistica);
+                            cout << "[Logística] RELLENANDO Celda #" << (i + 1)
+                                 << " | Cantidad: " << cantidad_a_enviar << " kg | Silo Restante: " 
+                                 << SILO_ALUMINA_GLOBAL << " kg\n";
+                        }
+
+                        // simular tiempo de transferencia neumática
+                        this_thread::sleep_for(chrono::milliseconds(800));
+                    }
                 }
             }
 
-            // Procesar solicitudes (simulado)
-            for (int s = 0; s < solicitudes_count && system_running; ++s) {
-                int id = solicitudes[s].id;
-                int cantidad = solicitudes[s].cantidad;
-
-                {
-                    // proteger logs con mutex
-                    lock_guard<mutex> lg(candado_logistica);
-                    cout << "[Logística] Procesando solicitud (simulada) -> ID: " << id
-                         << " | Cantidad: " << cantidad << " unidades\n";
-                }
-
-                // simular tiempo de transferencia
-                this_thread::sleep_for(chrono::milliseconds(200 + (cantidad % 400)));
-
-                {
-                    lock_guard<mutex> lg(candado_logistica);
-                    cout << "[Logística] Transferencia simulada completa para ID: " << id << " (" << cantidad << " u)\n";
-                }
-
-                this_thread::sleep_for(chrono::milliseconds(150));
-            }
-
-            // dormir antes del siguiente ciclo
+            // dormir antes del siguiente ciclo de escaneo
             this_thread::sleep_for(chrono::milliseconds(SLEEP_MS));
         }
 

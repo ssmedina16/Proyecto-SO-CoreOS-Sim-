@@ -28,8 +28,13 @@ namespace Industrial
     void Hilo_Horno(EstadoPlanta &estado);
     //------------------------------------------------------------
 
+
     // Fase 2: Sistema de Logística
+    //------------------------------------------------------------
     void fase_logistica_transporte();
+    //------------------------------------------------------------
+
+    
 
     // Fase 3: Celdas de Reducción
     //------------------------------------------------------------
@@ -50,6 +55,12 @@ namespace Industrial
     //--------------------------------------------------------------
     void fase_reciclaje_gtc(InventarioAmbiental &env, std::mutex &mtx);
     //--------------------------------------------------------------
+
+    // Interconexión Fase 2 -> Fase 3 --- VARIABLES DE CONEXIÓN ENTRE PROCESOS ---
+    inline float SILO_ALUMINA_GLOBAL = 10000.0f;
+    inline const int MAX_CELDAS = 5;
+    // Las tolvas de las 5 celdas empezarán vacías (0.0f) para probar la conexión
+    inline float TOLVAS_CELDAS_GLOBAL[MAX_CELDAS] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
 
     // Fase 5: Trasiego del Crisol
     // void fase_trasiego_crisol();
