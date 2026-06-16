@@ -35,6 +35,7 @@ run: all init
 monitor: all init
 	@echo "Purgando registros de simulaciones anteriores..."
 	rm -f logs/*.log
+	@tmux kill-session -t coreos_monitor > /dev/null 2>&1 || true
 	@echo "Lanzando el Kernel Administrador en segundo plano sin fugas..."
 	./$(TARGET) > logs/kernel.log 2>&1 &
 	@sleep 1
