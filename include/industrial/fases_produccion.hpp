@@ -6,13 +6,6 @@
 
 namespace Industrial
 {
-    // Inventario para comunicación Fase 3 - Fase 4
-    struct InventarioAmbiental
-    {
-        float gases_acumulados = 0.0f;
-        float alumina_enriquecida = 0.0f;
-    };
-
     // Fase 1: Planta de Carbón
     //------------------------------------------------------------
     struct EstadoPlanta
@@ -48,12 +41,12 @@ namespace Industrial
     };
 
     void fase_celdas_reduccion(int cantidad_celdas);
-    void Hilo_Celda(EstadoCelda &mi_estado, InventarioAmbiental &env, std::mutex &mtx, std::ofstream &log_file);
+    void Hilo_Celda(EstadoCelda &mi_estado, std::mutex &mtx, std::ofstream &log_file);
     //--------------------------------------------------------------
 
     // Fase 4: Reciclaje GTC
     //--------------------------------------------------------------
-    void fase_reciclaje_gtc(InventarioAmbiental &env, std::mutex &mtx);
+    void fase_reciclaje_gtc(std::mutex &mtx);
     //--------------------------------------------------------------
 
     /** 
@@ -64,6 +57,10 @@ namespace Industrial
         float silo_alumina;        // Inventario global gestionado por Fase 2
         float tolvas_celdas[5];    // Tolvas de alúmina para cada celda (Fase 2 -> Fase 3)
         int anodos_producidos;     // Stock de ánodos listos (Fase 1 -> Fase 3)
+        
+        // --- Integración Fase 4 (Reciclaje GTC y Garbage Collection) ---
+        float gases_acumulados;      // Gases emitidos por las celdas (basura a recolectar por Fase 4)
+        float alumina_enriquecida;   // Materia prima reciclada lista para usarse en las celdas
     };
 
     /** 

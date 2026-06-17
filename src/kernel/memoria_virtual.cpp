@@ -43,6 +43,10 @@ namespace Industrial {
             shm_planta->tolvas_celdas[i] = 400.0f;
         }
         shm_planta->anodos_producidos = 0;
+        
+        // Inicialización de las variables globales para el Garbage Collection (Fase 4)
+        shm_planta->gases_acumulados = 0.0f;
+        shm_planta->alumina_enriquecida = 0.0f;
 
         std::cout << "[Kernel] Memoria Virtual Compartida inicializada correctamente en RAM." << std::endl;
         return ptr;

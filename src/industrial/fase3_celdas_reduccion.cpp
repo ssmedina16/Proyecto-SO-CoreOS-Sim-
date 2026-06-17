@@ -32,7 +32,7 @@ static void recibir_signal_apagado_f3(int sig)
 namespace Industrial
 {
 
-    void Hilo_Celda(EstadoCelda &mi_estado, InventarioAmbiental &env, mutex &mtx, ofstream &log_file)
+    void Hilo_Celda(EstadoCelda &mi_estado, mutex &mtx, ofstream &log_file)
     {
         while (system_running)
         {
@@ -46,10 +46,11 @@ namespace Industrial
                 lock_guard<mutex> lock(mtx);
 
                 // Verificación de recursos en Memoria Compartida (SHM)
-                // Se requiere al menos un ánodo (producido en Fase 1) y 200kg alúmina (gestionada en Fase 2)
-                if (env.alumina_enriquecida >= alumina_req && shared_planta->anodos_producidos >= 1)
+                // Primero intentamos usar la alúmina reciclada (alumina_enriquecida) procesada por la Fase 4
+                // y se requiere al menos un ánodo (producido en Fase 1)
+                if (shared_planta->alumina_enriquecida >= alumina_req && shared_planta->anodos_producidos >= 1)
                 {
-                    env.alumina_enriquecida -= alumina_req;
+                    shared_planta->alumina_enriquecida -= alumina_req;
                     shared_planta->anodos_producidos--; // Consumo directo de SHM
                     produccion_ok = true;
 
@@ -68,10 +69,12 @@ namespace Industrial
             {
                 mi_estado.aluminio_producido += 100.0f;
 
-                // Generar gases
+                // Generar gases residuales
                 {
                     lock_guard<mutex> lock(mtx);
-                    env.gases_acumulados += 50.0f;
+                    // Inyectamos los desechos directamente en la memoria global (SHM) 
+                    // para que la Fase 4 (Garbage Collector) los recoja más adelante
+                    shared_planta->gases_acumulados += 50.0f;
                 }
 
                 lock_guard<mutex> log_lock(candado_log_f3);
@@ -99,7 +102,6 @@ namespace Industrial
 
         log_file << "=== INICIALIZACIÓN DE LOG DE REDUCCIÓN (FASE 3) ===\n" << flush;
 
-        InventarioAmbiental inventario_ambiental;
         mutex candado_inventario;
         vector<thread> hilos;
         vector<EstadoCelda> celdas(cantidad_celdas);
@@ -107,13 +109,13 @@ namespace Industrial
         cout << "\n>>> [PROCESO] INICIANDO FASE 3 (RED) Y FASE 4 (GTC) - PID: " << getpid() << " <<<\n\n";
 
         // Lanzar GTC
-        hilos.push_back(thread(fase_reciclaje_gtc, ref(inventario_ambiental), ref(candado_inventario)));
+        hilos.push_back(thread(fase_reciclaje_gtc, ref(candado_inventario)));
 
         // Lanzar Celdas
         for (int i = 0; i < cantidad_celdas; ++i)
         {
             celdas[i] = {i + 1, 958.0f, shared_planta->tolvas_celdas[i], 200.0f, 0.0f};
-            hilos.push_back(thread(Hilo_Celda, ref(celdas[i]), ref(inventario_ambiental), ref(candado_inventario), ref(log_file)));
+            hilos.push_back(thread(Hilo_Celda, ref(celdas[i]), ref(candado_inventario), ref(log_file)));
         }
 
         for (auto &h : hilos)

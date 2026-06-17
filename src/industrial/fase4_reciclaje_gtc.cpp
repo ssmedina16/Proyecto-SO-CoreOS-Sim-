@@ -16,7 +16,7 @@ static mutex candado_log_f4;
 
 namespace Industrial
 {
-    void fase_reciclaje_gtc(InventarioAmbiental &env, mutex &mtx)
+    void fase_reciclaje_gtc(mutex &mtx)
     {
         // Apertura del flujo de archivo truncando registros previos
         ofstream log_file("logs/fase4_gtc.log", ios::out | ios::trunc);
@@ -34,12 +34,20 @@ namespace Industrial
             float gases_capturados = 0.0f;
 
             {
+                // Protegemos el acceso a la memoria compartida global (SHM)
                 lock_guard<mutex> lock(mtx);
-                if (env.gases_acumulados >= 100.0f)
+                
+                // El recolector de basura (GC) verifica si hay suficientes residuos acumulados en la RAM
+                if (shared_planta->gases_acumulados >= 100.0f)
                 {
-                    gases_capturados = env.gases_acumulados;
-                    env.gases_acumulados = 0.0f;
-                    env.alumina_enriquecida += (gases_capturados * 0.5f);
+                    // 1. Extraemos los gases residuales de forma atómica
+                    gases_capturados = shared_planta->gases_acumulados;
+                    
+                    // 2. Limpiamos el espacio en RAM ("Garbage Collection")
+                    shared_planta->gases_acumulados = 0.0f;
+                    
+                    // 3. Transformamos (reciclamos) la basura en materia prima útil (alúmina) en la SHM global
+                    shared_planta->alumina_enriquecida += (gases_capturados * 0.5f);
                 }
             }
 
