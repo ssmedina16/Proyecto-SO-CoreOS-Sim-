@@ -55,6 +55,10 @@ public:
      *true si está vacía, false en caso contrario.
      */
     bool estaVacia(int numero_cola);
+
+    void ejecutarTurno(PCB& proceso, bool& termino_rafaga);
+
+    void forzarRetornoPrioridad();
 };
 
 #endif // PLANIFICADOR_HPP
