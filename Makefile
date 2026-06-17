@@ -3,7 +3,7 @@ CXX = g++
 CXXFLAGS = -std=c++17 -pthread -Iinclude
 
 # Buscamos automáticamente todos los archivos .cpp en src y sus subcarpetas
-SRCS = src/main.cpp $(wildcard src/industrial/*.cpp)
+SRCS = src/main.cpp $(wildcard src/industrial/*.cpp) $(wildcard src/kernel/*.cpp)
 
 # Definimos el nombre del ejecutable y su carpeta
 TARGET = build/main
