@@ -69,8 +69,14 @@ namespace Industrial {
 
                 {
                     lock_guard<mutex> lock(candado_planta);
+                    // Actualización directa en la Memoria Compartida (POSIX IPC)
+                    // Esto permite que la Fase 3 vea los ánodos disponibles sin usar archivos o tuberías.
+                    if (shared_planta != nullptr) {
+                        shared_planta->anodos_producidos++;
+                    }
                     estado.anodos_producidos++;
-                    cout << "[Horno - PID: " << estado.pid_proceso << "] Ánodos listos: " << estado.anodos_producidos << "\n\n";
+                    cout << "[Horno - PID: " << estado.pid_proceso << "] Ánodos totales (SHM): " 
+                         << (shared_planta ? shared_planta->anodos_producidos : estado.anodos_producidos) << "\n\n";
                 }
             } else {
                 this_thread::sleep_for(chrono::milliseconds(1500));

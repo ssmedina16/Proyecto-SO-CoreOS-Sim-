@@ -56,11 +56,23 @@ namespace Industrial
     void fase_reciclaje_gtc(InventarioAmbiental &env, std::mutex &mtx);
     //--------------------------------------------------------------
 
-    // Interconexión Fase 2 -> Fase 3 --- VARIABLES DE CONEXIÓN ENTRE PROCESOS ---
-    inline float SILO_ALUMINA_GLOBAL = 50000.0f;
+    /** 
+     * @brief Estructura de Memoria Virtual Compartida POSIX (IPC)
+     * Unifica los recursos compartidos entre procesos independientes (Fase 1, 2 y 3) en RAM real.
+     */
+    struct MemoriaCompartidaPlanta {
+        float silo_alumina;        // Inventario global gestionado por Fase 2
+        float tolvas_celdas[5];    // Tolvas de alúmina para cada celda (Fase 2 -> Fase 3)
+        int anodos_producidos;     // Stock de ánodos listos (Fase 1 -> Fase 3)
+    };
+
+    /** 
+     * @brief Puntero global a la memoria compartida mapeada.
+     * Debe ser inicializado en main.cpp mediante shm_open y mmap.
+     */
+    extern MemoriaCompartidaPlanta* shared_planta;
+
     inline const int MAX_CELDAS = 5;
-    // Las tolvas de las 5 celdas para probar la conexión
-    inline float TOLVAS_CELDAS_GLOBAL[MAX_CELDAS] = {400.0f, 400.0f, 400.0f, 400.0f, 400.0f};
 
     // Fase 5: Trasiego del Crisol
     // void fase_trasiego_crisol();

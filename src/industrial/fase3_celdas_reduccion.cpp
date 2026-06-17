@@ -36,41 +36,36 @@ namespace Industrial
     {
         while (system_running)
         {
-            // Sincronizar estado local con la tolva global
-            mi_estado.alumina_kg = TOLVAS_CELDAS_GLOBAL[mi_estado.id_celda - 1];
-
             float alumina_req = 200.0f;
-            float anodo_req = 45.0f;
 
             bool produccion_ok = false;
 
-            // Bloqueo solo para verificar y consumir recursos
+            // Bloqueo de exclusión mutua para asegurar que ningún otro hilo de este proceso
+            // acceda al inventario o a la memoria compartida simultáneamente durante el consumo.
             {
                 lock_guard<mutex> lock(mtx);
 
-                // Priorizar alúmina enriquecida
-                if (env.alumina_enriquecida >= alumina_req && mi_estado.anodo_carbon_kg >= anodo_req)
+                // Verificación de recursos en Memoria Compartida (SHM)
+                // Se requiere al menos un ánodo (producido en Fase 1) y 200kg alúmina (gestionada en Fase 2)
+                if (env.alumina_enriquecida >= alumina_req && shared_planta->anodos_producidos >= 1)
                 {
                     env.alumina_enriquecida -= alumina_req;
-                    mi_estado.anodo_carbon_kg -= anodo_req;
+                    shared_planta->anodos_producidos--; // Consumo directo de SHM
                     produccion_ok = true;
 
                     lock_guard<mutex> log_lock(candado_log_f3);
-                    log_file << "[Celda #" << mi_estado.id_celda << "] CONSUMIDA Alúmina Enriquecida.\n" << flush;
+                    log_file << "[Celda #" << mi_estado.id_celda << "] CONSUMIDA Alúmina Enriquecida y Ánodo de SHM.\n" << flush;
                 }
-                else if (mi_estado.alumina_kg >= alumina_req && mi_estado.anodo_carbon_kg >= anodo_req)
+                else if (shared_planta->tolvas_celdas[mi_estado.id_celda - 1] >= alumina_req && shared_planta->anodos_producidos >= 1)
                 {
-                    mi_estado.alumina_kg -= alumina_req;
-                    mi_estado.anodo_carbon_kg -= anodo_req;
+                    shared_planta->tolvas_celdas[mi_estado.id_celda - 1] -= alumina_req; // Resta directamente de la tolva en RAM real
+                    shared_planta->anodos_producidos--; // Consumo de ánodo de SHM
                     produccion_ok = true;
                 }
             }
 
             if (produccion_ok)
             {
-                // Guardar el remanente de alúmina en la tolva global
-                TOLVAS_CELDAS_GLOBAL[mi_estado.id_celda - 1] = mi_estado.alumina_kg;
-
                 mi_estado.aluminio_producido += 100.0f;
 
                 // Generar gases
@@ -117,7 +112,7 @@ namespace Industrial
         // Lanzar Celdas
         for (int i = 0; i < cantidad_celdas; ++i)
         {
-            celdas[i] = {i + 1, 958.0f, TOLVAS_CELDAS_GLOBAL[i], 200.0f, 0.0f};
+            celdas[i] = {i + 1, 958.0f, shared_planta->tolvas_celdas[i], 200.0f, 0.0f};
             hilos.push_back(thread(Hilo_Celda, ref(celdas[i]), ref(inventario_ambiental), ref(candado_inventario), ref(log_file)));
         }
 

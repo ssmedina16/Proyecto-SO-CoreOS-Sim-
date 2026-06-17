@@ -4,10 +4,14 @@
 #include <unistd.h>   // Requerido para fork() y pid_t
 #include <signal.h>   // Requerido para señales del SO (kill, SIGTERM)
 #include <sys/wait.h> // Requerido para waitpid()
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include "../include/industrial/fases_produccion.hpp"
-// no IPC POSIX aquí; mantener includes mínimos
 
 using namespace std;
+
+Industrial::MemoriaCompartidaPlanta* Industrial::shared_planta = nullptr;
 
 // Variables de control globales (utilizadas principalmente por el Padre)
 volatile sig_atomic_t system_running = 1;
@@ -35,7 +39,39 @@ int main()
     signal(SIGTERM, interceptar_apagado_padre);
     signal(SIGINT, interceptar_apagado_padre);
 
-    // No se inicializa IPC POSIX; la Fase 2 opera de forma local/simulada
+    /**
+     * INICIALIZACIÓN DEL GESTOR DE MEMORIA VIRTUAL COMPARTIDA (SHM)
+     * -----------------------------------------------------------
+     * 1. shm_open: Crea o abre un objeto de memoria compartida POSIX.
+     * 2. ftruncate: Define el tamaño físico en bytes (sizeof de la estructura).
+     * 3. mmap: Mapea el objeto en el espacio de direcciones del proceso.
+     * 4. shared_planta: Puntero que ahora apunta directamente a RAM compartida.
+     */
+    int shm_fd = shm_open("/shm_venalum", O_CREAT | O_RDWR, 0666);
+    if (shm_fd == -1) {
+        perror("shm_open");
+        return 1;
+    }
+
+    if (ftruncate(shm_fd, sizeof(Industrial::MemoriaCompartidaPlanta)) == -1) {
+        perror("ftruncate");
+        return 1;
+    }
+
+    Industrial::shared_planta = (Industrial::MemoriaCompartidaPlanta*)mmap(NULL, 
+        sizeof(Industrial::MemoriaCompartidaPlanta), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+
+    if (Industrial::shared_planta == MAP_FAILED) {
+        perror("mmap");
+        return 1;
+    }
+
+    // Inicializar datos iniciales directamente en la RAM compartida
+    Industrial::shared_planta->silo_alumina = 50000.0f;
+    for (int i = 0; i < 5; ++i) {
+        Industrial::shared_planta->tolvas_celdas[i] = 400.0f;
+    }
+    Industrial::shared_planta->anodos_producidos = 0;
 
     // 1. LANZAMIENTO DE LA FASE 1: PLANTA DE CARBÓN (SANTIAGO)
     pid_t pid_plantaCarbon = fork();
@@ -84,6 +120,17 @@ int main()
     waitpid(pid_plantaCarbon, nullptr, 0);
     waitpid(pid_logistica, nullptr, 0);
     waitpid(pid_celdasElectroliticas, nullptr, 0);
+
+    /**
+     * LIMPIEZA DE RECURSOS IPC
+     * ------------------------
+     * munmap: Desmapea la memoria del espacio del proceso.
+     * shm_unlink: Elimina el objeto de memoria compartida del sistema Linux.
+     */
+    if (Industrial::shared_planta != nullptr && Industrial::shared_planta != MAP_FAILED) {
+        munmap(Industrial::shared_planta, sizeof(Industrial::MemoriaCompartidaPlanta));
+        shm_unlink("/shm_venalum");
+    }
 
     cout << "[Kernel] Todos los procesos industriales detenidos. Sistema finalizado." << endl;
     return 0;

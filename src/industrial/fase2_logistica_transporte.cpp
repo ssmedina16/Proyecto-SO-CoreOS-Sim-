@@ -42,22 +42,24 @@ namespace Industrial {
 
         cout << "\n>>> [PROCESO] INICIANDO FASE 2: LOGÍSTICA Y TRANSPORTE (SIMULADA) - PID: " << getpid() << " <<<\n\n";
 
-        // Bucle principal iterativo (escaneo de tolvas globales)
+        // Bucle principal iterativo (escaneo de tolvas en memoria compartida)
         while (system_running) {
             for (int i = 0; i < MAX_CELDAS; ++i) {
-                if (TOLVAS_CELDAS_GLOBAL[i] < 500.0f) {
-                    float cantidad_a_enviar = 1000.0f - TOLVAS_CELDAS_GLOBAL[i];
+                // Se accede a 'shared_planta' que apunta a la RAM compartida por todos los procesos
+                if (shared_planta->tolvas_celdas[i] < 500.0f) {
+                    float cantidad_a_enviar = 1000.0f - shared_planta->tolvas_celdas[i];
 
-                    if (SILO_ALUMINA_GLOBAL >= cantidad_a_enviar) {
-                        SILO_ALUMINA_GLOBAL -= cantidad_a_enviar;
-                        TOLVAS_CELDAS_GLOBAL[i] += cantidad_a_enviar;
+                    if (shared_planta->silo_alumina >= cantidad_a_enviar) {
+                        // Descontar del silo global y sumar a la tolva específica en RAM real
+                        shared_planta->silo_alumina -= cantidad_a_enviar;
+                        shared_planta->tolvas_celdas[i] += cantidad_a_enviar;
 
                         {
-                            // proteger logs con mutex
+                            // proteger logs con mutex (exclusión mutua hilos internos)
                             lock_guard<mutex> lg(candado_logistica);
                             log_file << "[Logística] RELLENANDO Celda #" << (i + 1)
-                                     << " | Cantidad: " << cantidad_a_enviar << " kg | Silo Restante: " 
-                                     << SILO_ALUMINA_GLOBAL << " kg\n" << std::flush;
+                                     << " | Cantidad: " << cantidad_a_enviar << " kg | Silo SHM: " 
+                                     << shared_planta->silo_alumina << " kg\n" << std::flush;
                         }
 
                         // simular tiempo de transferencia neumática
