@@ -5,11 +5,15 @@
 #include <signal.h>   // Requerido para señales del SO (kill, SIGTERM)
 #include <sys/wait.h> // Requerido para waitpid()
 #include "../include/industrial/fases_produccion.hpp"
+// no IPC POSIX aquí; mantener includes mínimos
 
 using namespace std;
 
 // Variables de control globales (utilizadas principalmente por el Padre)
 volatile sig_atomic_t system_running = 1;
+
+// Inicialización de IPC para silo y tolvas
+// init_ipc_silo_tolvas removed per request; no shared silo/tolvas in main
 
 /**
  * Manejador genérico para el proceso padre (Kernel).
@@ -24,20 +28,24 @@ void interceptar_apagado_padre(int sig)
 
 int main()
 {
-    std::cout << ">>> [KERNEL] INICIANDO COREOS-SIM (ARQUITECTURA MULTIPROCESO) <<<\n" << std::endl;
+    std::cout << ">>> [KERNEL] INICIANDO COREOS-SIM (ARQUITECTURA MULTIPROCESO) <<<\n"
+              << std::endl;
 
     // Configuración de señal para el padre
     signal(SIGTERM, interceptar_apagado_padre);
     signal(SIGINT, interceptar_apagado_padre);
 
+    // No se inicializa IPC POSIX; la Fase 2 opera de forma local/simulada
+
     // 1. LANZAMIENTO DE LA FASE 1: PLANTA DE CARBÓN (SANTIAGO)
     pid_t pid_plantaCarbon = fork();
 
-    if (pid_plantaCarbon == 0) {
+    if (pid_plantaCarbon == 0)
+    {
         // PROCESO HIJO: Planta de Carbón
         // El hijo configura sus propios handlers dentro de su .cpp
         Industrial::fase_planta_carbon();
-        return 0; 
+        return 0;
     }
 
     // 2. LANZAMIENTO DE LA FASE 2: LOGÍSTICA Y TRANSPORTE
@@ -51,7 +59,8 @@ int main()
     // 3. LANZAMIENTO DE LA FASE 3: CELDAS DE REDUCCIÓN (JP)
     pid_t pid_celdasElectroliticas = fork();
 
-    if (pid_celdasElectroliticas == 0) {
+    if (pid_celdasElectroliticas == 0)
+    {
         // PROCESO HIJO: Celdas de Reducción
         Industrial::fase_celdas_reduccion(5);
         return 0;
