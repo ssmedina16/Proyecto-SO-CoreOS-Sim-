@@ -56,8 +56,8 @@ namespace Industrial {
                     estado.coque_kg -= coque_req;
                     estado.brea_kg -= brea_req;
                     recursos_ok = true;
-                    cout << "[Horno - PID: " << estado.pid_proceso << "] Iniciando ciclo de cocción (3s).... [Quedan: " 
-                         << estado.coque_kg << "kg Coque | " << estado.brea_kg << "kg Brea]\n";
+                    cout << "[Horno - PID: " << estado.pid_proceso << "] [Materia Prima] Consumiendo coque y brea del inventario local para el ciclo térmico.\n";
+                    cout << "[Horno - PID: " << estado.pid_proceso << "] Iniciando ciclo de cocción en horno (Espera activa de 3s).\n";
                 } else {
                     cout << "[Horno - PID: " << estado.pid_proceso << "] FALTAN MATERIAS PRIMAS EN LA PLANTA DE CARBÓN.\n";
                 }
@@ -75,8 +75,8 @@ namespace Industrial {
                         shared_planta->anodos_producidos++;
                     }
                     estado.anodos_producidos++;
-                    cout << "[Horno - PID: " << estado.pid_proceso << "] Ánodos totales (SHM): " 
-                         << (shared_planta ? shared_planta->anodos_producidos : estado.anodos_producidos) << "\n\n";
+                    cout << "---------------------------------------------------------\n";
+                    cout << "[Horno - PID: " << estado.pid_proceso << "] [MEMORIA] ¡Ánodo Cocido generado con éxito! Inyectando recurso en RAM global. [Total SHM: " << shared_planta->anodos_producidos << "]\n";
                 }
             } else {
                 this_thread::sleep_for(chrono::milliseconds(1500));

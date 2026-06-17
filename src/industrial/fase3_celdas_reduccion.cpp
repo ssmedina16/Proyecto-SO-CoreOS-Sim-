@@ -46,6 +46,11 @@ namespace Industrial
                 lock_guard<mutex> lock(mtx);
 
                 // Verificación de recursos en Memoria Compartida (SHM)
+                {
+                    lock_guard<mutex> log_lock(candado_log_f3);
+                    log_file << "[Celda #" << mi_estado.id_celda << "] [SHM Read] Leyendo memoria compartida -> Ánodos listos: " << shared_planta->anodos_producidos << " | Alúmina Eco: " << shared_planta->alumina_enriquecida << " kg\n" << flush;
+                }
+                
                 // Primero intentamos usar la alúmina reciclada (alumina_enriquecida) procesada por la Fase 4
                 // y se requiere al menos un ánodo (producido en Fase 1)
                 if (shared_planta->alumina_enriquecida >= alumina_req && shared_planta->anodos_producidos >= 1)
@@ -55,7 +60,7 @@ namespace Industrial
                     produccion_ok = true;
 
                     lock_guard<mutex> log_lock(candado_log_f3);
-                    log_file << "[Celda #" << mi_estado.id_celda << "] CONSUMIDA Alúmina Enriquecida y Ánodo de SHM.\n" << flush;
+                    log_file << "[Celda #" << mi_estado.id_celda << "] [RECURSO ECO] Alúmina Enriquecida del GTC detectada en RAM. Consumiendo con prioridad verde.\n" << flush;
                 }
                 else if (shared_planta->tolvas_celdas[mi_estado.id_celda - 1] >= alumina_req && shared_planta->anodos_producidos >= 1)
                 {
@@ -78,7 +83,8 @@ namespace Industrial
                 }
 
                 lock_guard<mutex> log_lock(candado_log_f3);
-                log_file << "[Celda #" << mi_estado.id_celda << "] REDUCCIÓN OK | Al: " << mi_estado.aluminio_producido << "kg | Gases +50kg\n" << flush;
+                log_file << "[Celda #" << mi_estado.id_celda << "] >>> NÚCLEO DE ELECTRÓLISIS ACTIVO <<< | Reducción Exitosa | Ánodo Consumido | Aluminio Líquido Acumulado: " << mi_estado.aluminio_producido << " kg | [SHM Gases Inyectados: +50kg]\n"
+                         << "---------------------------------------------------------\n" << flush;
             }
             else
             {

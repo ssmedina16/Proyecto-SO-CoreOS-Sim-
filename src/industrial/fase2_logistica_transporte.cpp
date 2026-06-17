@@ -44,12 +44,17 @@ namespace Industrial {
 
         // Bucle principal iterativo (escaneo de tolvas en memoria compartida)
         while (system_running) {
+            {
+                lock_guard<mutex> lg(candado_logistica);
+                log_file << "[Logística] [DMA Scan] Escaneando mapa de tolvas en memoria compartida...\n" << std::flush;
+            }
             for (int i = 0; i < MAX_CELDAS; ++i) {
                 // Se accede a 'shared_planta' que apunta a la RAM compartida por todos los procesos
                 if (shared_planta->tolvas_celdas[i] < 500.0f) {
                     float cantidad_a_enviar = 1000.0f - shared_planta->tolvas_celdas[i];
 
                     if (shared_planta->silo_alumina >= cantidad_a_enviar) {
+                        float nivel_actual = shared_planta->tolvas_celdas[i];
                         // Descontar del silo global y sumar a la tolva específica en RAM real
                         shared_planta->silo_alumina -= cantidad_a_enviar;
                         shared_planta->tolvas_celdas[i] += cantidad_a_enviar;
@@ -57,9 +62,10 @@ namespace Industrial {
                         {
                             // proteger logs con mutex (exclusión mutua hilos internos)
                             lock_guard<mutex> lg(candado_logistica);
-                            log_file << "[Logística] RELLENANDO Celda #" << (i + 1)
-                                     << " | Cantidad: " << cantidad_a_enviar << " kg | Silo SHM: " 
-                                     << shared_planta->silo_alumina << " kg\n" << std::flush;
+                            log_file << "[Logística] [ALERTA] Celda #" << (i + 1) << " requiere reabastecimiento. Nivel actual: " << nivel_actual << " kg (Umbral < 500kg).\n"
+                                     << "[Logística] [IPC] Retirando recursos del Silo Central. [Silo SHM Restante: " << shared_planta->silo_alumina << " kg]\n"
+                                     << "[Logística] [TRANSFERENCIA OK] Inyectando recursos en la dirección de memoria de la Celda #" << (i + 1) << ". [Tolva SHM: " << shared_planta->tolvas_celdas[i] << " kg]\n"
+                                     << "---------------------------------------------------------\n" << std::flush;
                         }
 
                         // simular tiempo de transferencia neumática

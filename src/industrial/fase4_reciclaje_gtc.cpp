@@ -31,6 +31,11 @@ namespace Industrial
         {
             this_thread::sleep_for(chrono::seconds(5));
 
+            {
+                lock_guard<mutex> log_lock(candado_log_f4);
+                log_file << "[GTC - Garbage Collector] Escaneando el registro de gases residuales globales en la memoria...\n" << flush;
+            }
+
             float gases_capturados = 0.0f;
 
             {
@@ -54,9 +59,10 @@ namespace Industrial
             if (gases_capturados > 0)
             {
                 lock_guard<mutex> log_lock(candado_log_f4);
-                log_file << "[GTC] Capturados " << gases_capturados
-                         << "kg de gases. Alúmina Enriquecida generada: "
-                         << (gases_capturados * 0.5f) << "kg.\n" << flush;
+                log_file << "[GTC] [ALERTA] Nivel crítico de emisiones detectado (" << gases_capturados << " kg). Iniciando ciclo atómico de lavado químico...\n"
+                         << "[GTC] [MEMORIA] Registro 'gases_acumulados' purgado a 0.0f en la RAM real. Espacio virtual liberado.\n"
+                         << "[GTC] [RECICLAJE] Materia prima regenerada: +" << (gases_capturados * 0.5f) << " kg de Alúmina Enriquecida escrita en RAM global. [Total SHM Eco: " << shared_planta->alumina_enriquecida << "]\n"
+                         << "---------------------------------------------------------\n" << flush;
             }
         }
 
