@@ -59,6 +59,17 @@ public:
     void ejecutarTurno(PCB& proceso, bool& termino_rafaga);
 
     void forzarRetornoPrioridad();
+
+    /**
+     * @brief Loop central del planificador. Actúa como el hilo maestro de la CPU virtual.
+     */
+    void runScheduler();
+
+    /**
+     * @brief Simula el despacho y paso de un proceso por la CPU virtual.
+     * @param proceso Referencia al PCB extraído de las colas.
+     */
+    void simularCPU(PCB& proceso);
 };
 
 #endif // PLANIFICADOR_HPP

@@ -1,5 +1,11 @@
 #include "../../include/kernel/planificador.hpp"
 #include <iostream>
+#include <thread>
+#include <chrono>
+#include <csignal>
+
+// Flag global de control de apagado heredado del sistema
+extern volatile sig_atomic_t system_running;
 
 void MLFQScheduler::encolarProceso(PCB proceso, int numero_cola) {
     // Actualizamos la prioridad del PCB según la cola donde se inserta
@@ -121,5 +127,72 @@ void MLFQScheduler::forzarRetornoPrioridad() {
     while (desencolarProceso(3, proceso_aux)) {
         std::cout << "[MLFQ BOOST] Promoviendo Proceso ID " << proceso_aux.id << " de Cola 3 a Cola 1 por envejecimiento.\n";
         encolarProceso(proceso_aux, 1);
+    }
+}
+
+void MLFQScheduler::runScheduler() {
+    std::cout << "[KERNEL - SCHEDULER]: Hilo maestro del planificador MLFQ iniciado.\n";
+
+    while (system_running) {
+        PCB proceso_a_despachar;
+        bool proceso_encontrado = false;
+
+        // 1. REGLA DE PRIORIDAD ESTRICTA: Escaneo jerárquico de colas
+        if (!estaVacia(1)) { // Comprobar Cola 1 (Round Robin)
+            if (desencolarProceso(1, proceso_a_despachar)) { //
+                proceso_encontrado = true;
+            }
+        } 
+        else if (!estaVacia(2)) { // Comprobar Cola 2 (SJF)
+            if (desencolarProceso(2, proceso_a_despachar)) { //
+                proceso_encontrado = true;
+            }
+        } 
+        else if (!estaVacia(3)) { // Comprobar Cola 3 (FCFS)
+            if (desencolarProceso(3, proceso_a_despachar)) { //
+                proceso_encontrado = true;
+            }
+        }
+
+        // 2. DESPACHO O ESPERA ACTIVA CONTROLADA
+        if (proceso_encontrado) {
+            // Se envía el proceso al núcleo de procesamiento simulado
+            simularCPU(proceso_a_despachar);
+        } else {
+            // Evita el consumo destructivo del 100% de la CPU real cuando la planta está inactiva
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+    }
+    std::cout << "[KERNEL - SCHEDULER]: Hilo maestro del planificador detenido.\n";
+}
+
+void MLFQScheduler::simularCPU(PCB& proceso) {
+    // Transición de estado administrativo a EJECUTANDO
+    proceso.cambiarEstado(ProcessState::EJECUTANDO); //
+
+    std::cout << "\n=========================================================\n"
+              << "[KERNEL - DESPACHADOR]: Dispaching -> " << proceso.nombre_fase 
+              << " [ID: " << proceso.id << "] desde la COLA " << proceso.prioridad_actual << "\n"
+              << "=========================================================\n";
+
+    bool termino_rafaga = false;
+    
+    // Invocar el método de ejecución y degradación temporal previamente programado
+    ejecutarTurno(proceso, termino_rafaga); //
+
+    // Evaluación post-ejecución del ciclo de vida
+    if (!termino_rafaga) {
+        // Si no terminó su ráfaga total, significa que agotó su Quantum en Cola 1
+        // y el método 'ejecutarTurno' ya se encargó de degradarlo y re-encolarlo en la Cola 2.
+        std::cout << "[KERNEL - DESPACHADOR]: Proceso " << proceso.id 
+                  << " requiere más tiempo. Re-encolado en jerarquía inferior.\n";
+    } else {
+        // El proceso completó de forma exitosa su ciclo de ráfaga estimado
+        proceso.cambiarEstado(ProcessState::BLOQUEADO); // Transición de salida a espera de E/S o nuevo ciclo
+        std::cout << "[KERNEL - DESPACHADOR]: Proceso " << proceso.nombre_fase 
+                  << " [ID: " << proceso.id << "] completó su ráfaga de CPU virtual de forma exitosa.\n";
+        
+        // Imprimir log de auditoría final del PCB
+        proceso.imprimirLog(); //
     }
 }
