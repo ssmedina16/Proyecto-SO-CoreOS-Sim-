@@ -21,6 +21,12 @@ namespace Industrial {
      * Administra el PCB en la Cola 1 (Round Robin) para control de misión crítica y reciclaje.
      */
     void wrapper_fase3_fase4_celdas(MLFQScheduler& scheduler);
+
+    /**
+     * @brief Wrapper para la Fase 5: Trasiego y Crisoles.
+     * Administra el PCB en la Cola 1 (Round Robin) y simula el vaciado de las celdas.
+     */
+    void wrapper_fase5_trasiego(MLFQScheduler& scheduler);
 }
 
 #endif // WRAPPERS_HPP

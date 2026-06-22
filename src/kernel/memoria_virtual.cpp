@@ -48,6 +48,11 @@ namespace Industrial {
         shm_planta->gases_acumulados = 0.0f;
         shm_planta->alumina_enriquecida = 0.0f;
 
+        // Inicialización para la Fase 5
+        for (int i = 0; i < 5; ++i) {
+            shm_planta->aluminio_producido[i] = 0.0f;
+        }
+
         std::cout << "[Kernel] Memoria Virtual Compartida inicializada correctamente en RAM." << std::endl;
         return ptr;
     }

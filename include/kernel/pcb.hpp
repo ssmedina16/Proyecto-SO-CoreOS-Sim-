@@ -38,12 +38,16 @@ struct PCB {
     int prioridad_actual;           ///< Nivel de cola actual (1, 2 o 3)
     double tiempo_ejecutado;        ///< Tiempo total acumulado de CPU
     double rafaga_estimada;         ///< Duración estimada de la ráfaga
+    ProcessState* estado_compartido = nullptr; ///< Puntero al estado original en el wrapper
 
     /**Cambia el estado del proceso de forma segura.
      * nuevo_estado El nuevo estado a asignar.
      */
     void cambiarEstado(ProcessState nuevo_estado) {
         this->estado = nuevo_estado;
+        if (estado_compartido != nullptr) {
+            *estado_compartido = nuevo_estado;
+        }
     }
 
     /**Imprime en consola los datos del PCB de manera formateada para auditoría.

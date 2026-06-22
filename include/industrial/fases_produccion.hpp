@@ -61,6 +61,9 @@ namespace Industrial
         // --- Integración Fase 4 (Reciclaje GTC y Garbage Collection) ---
         float gases_acumulados;      // Gases emitidos por las celdas (basura a recolectar por Fase 4)
         float alumina_enriquecida;   // Materia prima reciclada lista para usarse en las celdas
+
+        // --- Integración Fase 5 ---
+        float aluminio_producido[5]; // Aluminio líquido acumulado en cada celda (Fase 3 -> Fase 5)
     };
 
     /** 
