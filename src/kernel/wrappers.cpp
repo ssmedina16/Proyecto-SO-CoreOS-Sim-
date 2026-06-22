@@ -1,5 +1,6 @@
 #include "../../include/kernel/wrappers.hpp"
 #include "../../include/industrial/fases_produccion.hpp"
+#include "../../include/kernel/sincronizacion.hpp"
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -181,6 +182,11 @@ namespace Industrial {
         pcb_fase5.estado_compartido = &pcb_fase5.estado;
         scheduler.encolarProceso(pcb_fase5, 1);
 
+        // Registrar el KSemaphore de crisoles en el motor de sincronizacion
+        // (2 crisoles pueden operar en paralelo sobre distintas celdas)
+        KernelSyncEngine& ksync = KernelSyncEngine::getInstance();
+        ksync.registrarSemaforo(10, "crisoles_disponibles", 2);
+
         // Estructura para los 2 crisoles
         std::vector<EstadoCrisol> lista_crisoles(2);
         for (int i = 0; i < 2; ++i) {
@@ -219,27 +225,34 @@ namespace Industrial {
                                       << " (" << shared_planta->aluminio_producido[i] << " kg)\n";
                             
                             pcb_crisol[c].estado = EstadoProceso::BLOQUEADO;
-                            pcb_crisol[c].esperando_por = 1; // 1 = ID de mutex_crisol_succion
+                            pcb_crisol[c].esperando_por = 1; // 1 = ID de kmutex_crisol_succion
                             std::cout << "[Kernel OS] PCB PID " << pcb_crisol[c].PID 
-                                      << " cambiado a BLOQUEADO esperando mutex_crisol_succion (ID: 1)\n";
+                                      << " cambiado a BLOQUEADO esperando kmutex_crisol_succion (ID: 1)\n";
 
-                            // Exclusión mutua
-                            {
-                                std::unique_lock<std::mutex> lock(mutex_crisol_succion);
+                            // Exclusion mutua via KernelSyncEngine (detecta deadlocks + herencia de prio)
+                            PCB pcb_proxy;
+                            pcb_proxy.id              = pcb_crisol[c].PID;
+                            pcb_proxy.nombre_fase     = "Hilo_Crisol_" + std::to_string(c + 1);
+                            pcb_proxy.estado          = ProcessState::LISTO;
+                            pcb_proxy.prioridad_actual= 1;
+                            pcb_proxy.tiempo_ejecutado= 0.0;
+                            pcb_proxy.rafaga_estimada = 5.0;
 
+                            bool lock_ok = ksync.lock(1, pcb_proxy, scheduler);
+                            if (lock_ok) {
                                 pcb_crisol[c].estado = EstadoProceso::EJECUTANDO;
                                 pcb_crisol[c].esperando_por = 0;
-
-                                std::cout << "[Mutex] Hilo_Crisol #" << lista_crisoles[c].id_crisol 
-                                          << " adquiere exclusión de vaciado. PCB PID " << pcb_crisol[c].PID 
-                                          << " cambiado a EJECUTANDO.\n";
 
                                 float material_transferido = shared_planta->aluminio_producido[i];
                                 shared_planta->aluminio_producido[i] = 0.0f;
                                 lista_crisoles[c].aluminio_recolectado += material_transferido;
 
-                                std::cout << "[Éxito] Succión finalizada: " << material_transferido 
+                                std::cout << "[Exito] Succion finalizada: " << material_transferido 
                                           << " kg retirados de la Celda #" << (i + 1) << "\n";
+
+                                ksync.unlock(1, scheduler);
+                            } else {
+                                std::cout << "[KernelSyncEngine] Operacion de vaciado cancelada por prevencion de Deadlock.\n";
                             }
                             break; // Sigue al siguiente crisol/ciclo
                         }

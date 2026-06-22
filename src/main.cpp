@@ -7,6 +7,7 @@
 #include "../include/kernel/memoria_virtual.hpp"
 #include "../include/kernel/planificador.hpp"
 #include "../include/kernel/wrappers.hpp"
+#include "../include/kernel/sincronizacion.hpp"
 
 using namespace std;
 
@@ -74,6 +75,9 @@ int main() {
     for (auto& th : hilos_sistema) {
         if (th.joinable()) th.join();
     }
+
+    // Diagnóstico del motor de sincronización antes del cierre
+    KernelSyncEngine::getInstance().imprimirDiagnostico();
 
     // Desmapear memoria virtual y limpiar enlace del SO
     Industrial::liberar_memoria_virtual();

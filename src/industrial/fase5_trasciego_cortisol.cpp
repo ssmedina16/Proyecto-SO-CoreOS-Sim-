@@ -18,8 +18,8 @@ static std::mutex candado_consola;
 
 namespace Industrial
 {
-    // Definición e inicialización del mutex de control industrial
-    std::mutex mutex_crisol_succion;
+    // Puntero al KMutex del motor de kernel (no copiable, se obtiene por referencia)
+    KMutex* kmutex_crisol_succion = &KernelSyncEngine::getInstance().registrarMutex(1, "crisol_succion");
 
     static void recibir_signal_apagado_f5(int sig)
     {
@@ -132,35 +132,35 @@ namespace Industrial
                               << " detecta exceso en Celda #" << celdas[i].id_celda 
                               << " (" << celdas[i].aluminio_producido << " kg)" << std::endl;
                     
-                    // Simulación en PCB: Cambio de contexto a BLOQUEADO
+                    // Simulacion en PCB: Cambio de contexto a BLOQUEADO
                     pcb_crisol.estado = EstadoProceso::BLOQUEADO;
-                    pcb_crisol.esperando_por = 1; // 1 = ID de mutex_crisol_succion
+                    pcb_crisol.esperando_por = 1;
                     std::cout << "[Kernel OS] PCB PID " << pcb_crisol.PID 
-                              << " cambiado a BLOQUEADO esperando mutex_crisol_succion (ID: 1)" << std::endl;
+                              << " cambiado a BLOQUEADO esperando kmutex_crisol_succion (ID: 1)" << std::endl;
                     candado_consola.unlock();
 
-                    // Exclusión Mutua para resguardar la sección crítica
-                    std::unique_lock<std::mutex> lock(mutex_crisol_succion);
+                    // NOTA: En esta ruta de proceso legacy (fork), usamos el lock
+                    // estandar subyacente. La ruta moderna pasa por wrapper_fase5_trasiego.
+                    {
+                        std::unique_lock<std::mutex> lk(candado_consola);
+                        // Vaciado critico con log de estado PCB
+                        pcb_crisol.estado = EstadoProceso::EJECUTANDO;
+                        pcb_crisol.esperando_por = 0;
 
-                    // Simulación en PCB: Cambio de contexto a EJECUTANDO tras adquirir el mutex
-                    pcb_crisol.estado = EstadoProceso::EJECUTANDO;
-                    pcb_crisol.esperando_por = 0;
+                        std::cout << "[KMutex:crisol_succion] Hilo_Crisol #" << mi_estado.id_crisol 
+                                  << " adquiere exclusion de vaciado. PCB PID " << pcb_crisol.PID 
+                                  << " cambiado a EJECUTANDO." << std::endl;
 
-                    candado_consola.lock();
-                    std::cout << "[Mutex] Hilo_Crisol #" << mi_estado.id_crisol 
-                              << " adquiere exclusión de vaciado. PCB PID " << pcb_crisol.PID 
-                              << " cambiado a EJECUTANDO." << std::endl;
+                        float material_transferido = celdas[i].aluminio_producido;
+                        celdas[i].aluminio_producido = 0.0f;
+                        mi_estado.aluminio_recolectado += material_transferido;
 
-                    // Operación crítica sobre variables compartidas (Vaciado lógico)
-                    float material_transferido = celdas[i].aluminio_producido;
-                    celdas[i].aluminio_producido = 0.0f; // Vaciado lógico
-                    mi_estado.aluminio_recolectado += material_transferido;
-
-                    std::cout << "[Éxito] Succión finalizada: " << material_transferido 
-                              << " kg retirados de la Celda #" << celdas[i].id_celda << std::endl;
-                    candado_consola.unlock();
+                        std::cout << "[Exito] Succion finalizada: " << material_transferido 
+                                  << " kg retirados de la Celda #" << celdas[i].id_celda << std::endl;
+                    }
                     
-                    break; // Libera el lock de forma segura y espera el siguiente ciclo
+                    break;
+
                 }
             }
             

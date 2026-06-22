@@ -38,6 +38,7 @@ struct PCB {
     int prioridad_actual;           ///< Nivel de cola actual (1, 2 o 3)
     double tiempo_ejecutado;        ///< Tiempo total acumulado de CPU
     double rafaga_estimada;         ///< Duración estimada de la ráfaga
+    int esperando_por = 0;          ///< ID del mutex/semáforo que bloquea este PCB (0 = libre)
     ProcessState* estado_compartido = nullptr; ///< Puntero al estado original en el wrapper
 
     /**Cambia el estado del proceso de forma segura.

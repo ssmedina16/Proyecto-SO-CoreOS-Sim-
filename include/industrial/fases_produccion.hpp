@@ -3,6 +3,7 @@
 
 #include <mutex>
 #include <fstream>
+#include "../kernel/sincronizacion.hpp"
 
 namespace Industrial
 {
@@ -84,8 +85,8 @@ namespace Industrial
         bool en_operacion = false;           // Semáforo interno de ejecución
     };
 
-    // Objeto Mutex global que restringe el acceso al canal físico de extracción
-    extern std::mutex mutex_crisol_succion;
+    // Puntero al KMutex del motor de kernel que restringe el acceso al canal físico de extracción
+    extern KMutex* kmutex_crisol_succion;
 
     // Proceso Global de Logística
     void fase_trasiego_crisol(int cantidad_crisoles, EstadoCelda* celdas, int cantidad_celdas);
