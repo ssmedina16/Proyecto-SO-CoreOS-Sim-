@@ -4,6 +4,8 @@
 #include <mutex>
 #include <fstream>
 
+class MLFQScheduler;
+
 namespace Industrial
 {
     // Fase 1: Planta de Carbón
@@ -16,7 +18,6 @@ namespace Industrial
         int anodos_producidos; // Producto terminado para Fase 3
     };
 
-    void fase_planta_carbon();
     void Hilo_Mezcladora(EstadoPlanta &estado);
     void Hilo_Horno(EstadoPlanta &estado);
     //------------------------------------------------------------
@@ -24,7 +25,7 @@ namespace Industrial
 
     // Fase 2: Sistema de Logística
     //------------------------------------------------------------
-    void fase_logistica_transporte();
+    void simular_escaneo_tolvas();
     //------------------------------------------------------------
 
     
@@ -40,13 +41,12 @@ namespace Industrial
         float aluminio_producido; // Aluminio líquido acumulado
     };
 
-    void fase_celdas_reduccion(int cantidad_celdas);
-    void Hilo_Celda(EstadoCelda &mi_estado, std::mutex &mtx, std::ofstream &log_file);
+    void Hilo_Celda(EstadoCelda &mi_estado, std::mutex &mtx);
     //--------------------------------------------------------------
 
     // Fase 4: Reciclaje GTC
     //--------------------------------------------------------------
-    void fase_reciclaje_gtc(std::mutex &mtx);
+    void simular_reciclaje_gtc(std::mutex &mtx);
     //--------------------------------------------------------------
 
     /** 
@@ -72,7 +72,15 @@ namespace Industrial
     inline const int MAX_CELDAS = 5;
 
     // Fase 5: Trasiego del Crisol
-    // void fase_trasiego_crisol();
+    struct EstadoCrisol {
+        int id_crisol;
+        float capacidad_max_kg;
+        float aluminio_cargado_kg;
+        bool en_transito;
+    };
+    
+    // Necesario para la declaración
+    void fase_trasiego_crisol(::MLFQScheduler& scheduler);
 }
 
 #endif

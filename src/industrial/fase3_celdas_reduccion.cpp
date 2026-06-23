@@ -15,121 +15,51 @@ using namespace Industrial;
 // Comunicación con el Kernel
 extern volatile sig_atomic_t system_running;
 
-// Candado exclusivo: Protege el archivo .log de las colisiones entre hilos internos
-static mutex candado_log_f3;
 
-/**
- * Manejador de señales interno para el proceso de Celdas.
- */
-static void recibir_signal_apagado_f3(int sig)
-{
-    if (sig == SIGTERM)
-    {
-        system_running = 0;
-    }
-}
 
 namespace Industrial
 {
 
-    void Hilo_Celda(EstadoCelda &mi_estado, mutex &mtx, ofstream &log_file)
+    void Hilo_Celda(EstadoCelda &mi_estado, mutex &mtx)
     {
-        while (system_running)
+        if (shared_planta == nullptr) return;
+
+        float alumina_req = 200.0f;
+        bool produccion_ok = false;
+
         {
-            float alumina_req = 200.0f;
+            lock_guard<mutex> lock(mtx);
+            cout << "[Celda #" << mi_estado.id_celda << "] [SHM Read] Leyendo memoria compartida -> Ánodos listos: " << shared_planta->anodos_producidos << " | Alúmina Eco: " << shared_planta->alumina_enriquecida << " kg\n";
 
-            bool produccion_ok = false;
-
-            // Bloqueo de exclusión mutua para asegurar que ningún otro hilo de este proceso
-            // acceda al inventario o a la memoria compartida simultáneamente durante el consumo.
+            if (shared_planta->alumina_enriquecida >= alumina_req && shared_planta->anodos_producidos >= 1)
             {
-                lock_guard<mutex> lock(mtx);
+                shared_planta->alumina_enriquecida -= alumina_req;
+                shared_planta->anodos_producidos--; 
+                produccion_ok = true;
 
-                // Verificación de recursos en Memoria Compartida (SHM)
-                {
-                    lock_guard<mutex> log_lock(candado_log_f3);
-                    log_file << "[Celda #" << mi_estado.id_celda << "] [SHM Read] Leyendo memoria compartida -> Ánodos listos: " << shared_planta->anodos_producidos << " | Alúmina Eco: " << shared_planta->alumina_enriquecida << " kg\n" << flush;
-                }
-                
-                // Primero intentamos usar la alúmina reciclada (alumina_enriquecida) procesada por la Fase 4
-                // y se requiere al menos un ánodo (producido en Fase 1)
-                if (shared_planta->alumina_enriquecida >= alumina_req && shared_planta->anodos_producidos >= 1)
-                {
-                    shared_planta->alumina_enriquecida -= alumina_req;
-                    shared_planta->anodos_producidos--; // Consumo directo de SHM
-                    produccion_ok = true;
-
-                    lock_guard<mutex> log_lock(candado_log_f3);
-                    log_file << "[Celda #" << mi_estado.id_celda << "] [RECURSO ECO] Alúmina Enriquecida del GTC detectada en RAM. Consumiendo con prioridad verde.\n" << flush;
-                }
-                else if (shared_planta->tolvas_celdas[mi_estado.id_celda - 1] >= alumina_req && shared_planta->anodos_producidos >= 1)
-                {
-                    shared_planta->tolvas_celdas[mi_estado.id_celda - 1] -= alumina_req; // Resta directamente de la tolva en RAM real
-                    shared_planta->anodos_producidos--; // Consumo de ánodo de SHM
-                    produccion_ok = true;
-                }
+                cout << "[Celda #" << mi_estado.id_celda << "] [RECURSO ECO] Alúmina Enriquecida del GTC detectada en RAM. Consumiendo con prioridad verde.\n";
+            }
+            else if (shared_planta->tolvas_celdas[mi_estado.id_celda - 1] >= alumina_req && shared_planta->anodos_producidos >= 1)
+            {
+                shared_planta->tolvas_celdas[mi_estado.id_celda - 1] -= alumina_req; 
+                shared_planta->anodos_producidos--; 
+                produccion_ok = true;
             }
 
             if (produccion_ok)
             {
                 mi_estado.aluminio_producido += 100.0f;
+                shared_planta->gases_acumulados += 50.0f;
 
-                // Generar gases residuales
-                {
-                    lock_guard<mutex> lock(mtx);
-                    // Inyectamos los desechos directamente en la memoria global (SHM) 
-                    // para que la Fase 4 (Garbage Collector) los recoja más adelante
-                    shared_planta->gases_acumulados += 50.0f;
-                }
-
-                lock_guard<mutex> log_lock(candado_log_f3);
-                log_file << "[Celda #" << mi_estado.id_celda << "] >>> NÚCLEO DE ELECTRÓLISIS ACTIVO <<< | Reducción Exitosa | Ánodo Consumido | Aluminio Líquido Acumulado: " << mi_estado.aluminio_producido << " kg | [SHM Gases Inyectados: +50kg]\n"
-                         << "---------------------------------------------------------\n" << flush;
+                cout << "[Celda #" << mi_estado.id_celda << "] >>> NÚCLEO DE ELECTRÓLISIS ACTIVO <<< | Reducción Exitosa | Ánodo Consumido | Aluminio Líquido Acumulado: " << mi_estado.aluminio_producido << " kg | [SHM Gases Inyectados: +50kg]\n"
+                     << "---------------------------------------------------------\n";
             }
             else
             {
-                lock_guard<mutex> log_lock(candado_log_f3);
-                log_file << "[Celda #" << mi_estado.id_celda << "] FALTAN RECURSOS.\n" << flush;
+                cout << "[Celda #" << mi_estado.id_celda << "] FALTAN RECURSOS.\n";
             }
-            this_thread::sleep_for(chrono::milliseconds(2500));
         }
-    }
-
-    void fase_celdas_reduccion(int cantidad_celdas)
-    {
-        signal(SIGTERM, recibir_signal_apagado_f3);
-
-        // Apertura del flujo de archivo truncando registros previos
-        ofstream log_file("logs/fase3_reduccion.log", ios::out | ios::trunc);
-        if (!log_file.is_open()) {
-            cerr << "Error crítico: No se pudo crear el archivo de log de la Fase 3." << endl;
-            exit(1);
-        }
-
-        log_file << "=== INICIALIZACIÓN DE LOG DE REDUCCIÓN (FASE 3) ===\n" << flush;
-
-        mutex candado_inventario;
-        vector<thread> hilos;
-        vector<EstadoCelda> celdas(cantidad_celdas);
-
-        cout << "\n>>> [PROCESO] INICIANDO FASE 3 (RED) Y FASE 4 (GTC) - PID: " << getpid() << " <<<\n\n";
-
-        // Lanzar GTC
-        hilos.push_back(thread(fase_reciclaje_gtc, ref(candado_inventario)));
-
-        // Lanzar Celdas
-        for (int i = 0; i < cantidad_celdas; ++i)
-        {
-            celdas[i] = {i + 1, 958.0f, shared_planta->tolvas_celdas[i], 200.0f, 0.0f};
-            hilos.push_back(thread(Hilo_Celda, ref(celdas[i]), ref(candado_inventario), ref(log_file)));
-        }
-
-        for (auto &h : hilos)
-            if (h.joinable())
-                h.join();
-
-        log_file << "[Celdas Reducción] Proceso global finalizado.\n" << flush;
-        log_file.close();
-        exit(0);
     }
 }
+
+
