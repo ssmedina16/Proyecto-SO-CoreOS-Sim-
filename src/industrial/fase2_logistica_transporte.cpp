@@ -21,66 +21,52 @@ static const int SLEEP_MS = 1500;
 // Candado para logs dentro del proceso de logística
 static mutex candado_logistica;
 
-// Manejador de señal
-static void recibir_signal_apagado_f2(int sig) {
-    if (sig == SIGTERM) {
-        system_running = 0;
-    }
-}
-
 namespace Industrial {
 
     void fase_logistica_transporte() {
-        signal(SIGTERM, recibir_signal_apagado_f2);
+        // !!! bucle while(system_running) ELIMINADO !!!
+        // !!! exit(0) REMOVIDO COMPLETAMENTE !!!
 
-        std::ofstream log_file("logs/fase2_logistica.log", std::ios::out | std::ios::trunc);
+        // Cambiado a ios::app para acumular las transferencias a lo largo de la simulación
+        std::ofstream log_file("logs/fase2_logistica.log", std::ios::out | std::ios::app);
         if (!log_file.is_open()) {
-            std::cerr << "Critical Error: Could not create Phase 2 log file." << std::endl;
-            exit(1);
+            std::cerr << "Error Crítico: No se pudo abrir el archivo de log de Logística." << std::endl;
+            return;
         }
-        log_file << "=== INITIALIZATION OF LOGISTICAL LOG (PHASE 2) ===\n" << std::flush;
 
-        cout << "\n>>> [PROCESO] INICIANDO FASE 2: LOGÍSTICA Y TRANSPORTE (SIMULADA) - PID: " << getpid() << " <<<\n\n";
+        {
+            lock_guard<mutex> lg(candado_logistica);
+            cout << "[Logística] [DMA Scan] Escaneando mapa de tolvas en memoria compartida...\n";
+        }
 
-        // Bucle principal iterativo (escaneo de tolvas en memoria compartida)
-        while (system_running) {
-            {
-                lock_guard<mutex> lg(candado_logistica);
-                log_file << "[Logística] [DMA Scan] Escaneando mapa de tolvas en memoria compartida...\n" << std::flush;
-            }
+        if (shared_planta != nullptr) {
             for (int i = 0; i < MAX_CELDAS; ++i) {
-                // Se accede a 'shared_planta' que apunta a la RAM compartida por todos los procesos
                 if (shared_planta->tolvas_celdas[i] < 500.0f) {
-                    float cantidad_a_enviar = 1000.0f - shared_planta->tolvas_celdas[i];
+                    float nivel_actual = shared_planta->tolvas_celdas[i];
+                    float cantidad_a_enviar = 1000.0f - nivel_actual;
 
                     if (shared_planta->silo_alumina >= cantidad_a_enviar) {
-                        float nivel_actual = shared_planta->tolvas_celdas[i];
-                        // Descontar del silo global y sumar a la tolva específica en RAM real
                         shared_planta->silo_alumina -= cantidad_a_enviar;
                         shared_planta->tolvas_celdas[i] += cantidad_a_enviar;
 
                         {
-                            // proteger logs con mutex (exclusión mutua hilos internos)
                             lock_guard<mutex> lg(candado_logistica);
                             log_file << "[Logística] [ALERTA] Celda #" << (i + 1) << " requiere reabastecimiento. Nivel actual: " << nivel_actual << " kg (Umbral < 500kg).\n"
                                      << "[Logística] [IPC] Retirando recursos del Silo Central. [Silo SHM Restante: " << shared_planta->silo_alumina << " kg]\n"
                                      << "[Logística] [TRANSFERENCIA OK] Inyectando recursos en la dirección de memoria de la Celda #" << (i + 1) << ". [Tolva SHM: " << shared_planta->tolvas_celdas[i] << " kg]\n"
                                      << "---------------------------------------------------------\n" << std::flush;
+                            
+                            cout << "[Logística] [ALERTA] Inyectando recursos neumáticos en Celda #" << (i + 1) << "\n";
                         }
 
-                        // simular tiempo de transferencia neumática
-                        this_thread::sleep_for(chrono::milliseconds(800));
+                        // Simula el retardo atómico de la transferencia por este turno
+                        this_thread::sleep_for(chrono::milliseconds(200));
                     }
                 }
             }
-
-            // dormir antes del siguiente ciclo de escaneo
-            this_thread::sleep_for(chrono::milliseconds(SLEEP_MS));
         }
 
-        log_file << "[Logística] Finalizando proceso de logística.\n" << std::flush;
         log_file.close();
-        exit(0);
     }
 
 } 
