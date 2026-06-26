@@ -56,8 +56,12 @@ int main() {
     // 4. Lanzamiento del hilo supervisor de Inanición (Priority Boosting)
     std::thread thread_boost([&planificador]() {
         while (system_running) {
-            std::this_thread::sleep_for(std::chrono::seconds(10));
-            if (!system_running) break;
+            // Duerme 10 veces 1 segundo
+            for (int i = 0; i < 10; ++i) {
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+                if (!system_running) return; // Sale inmediatamente si el Kernel ordena apagar
+            }
+            
             std::cout << "\n >>> [KERNEL]: Alarma de envejecimiento activada. Forzando Priority Boost global... <<<\n";
             planificador.forzarRetornoPrioridad();
         }
