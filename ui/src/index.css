@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+/* ── Design Tokens: Industrial Control Room ─────────────── */
+@theme {
+  --color-foundry:       #0B0F14;
+  --color-steel:         #141B27;
+  --color-graphite:      #1C2535;
+  --color-molten:        #D4A843;
+  --color-molten-dim:    #A07E2E;
+  --color-electrolyte:   #3B7DDD;
+  --color-electrolyte-dim: #2A5FAA;
+  --color-process-green: #22B864;
+  --color-alarm:         #E5484D;
+  --color-alarm-dim:     #B83A3E;
+  --color-aluminum:      #94A3B8;
+  --color-aluminum-dim:  #64748B;
+  --color-surface-line:  #1E293B;
+
+  --font-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-body:    'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* ── Base Layer ─────────────────────────────────────────── */
+@layer base {
+  body {
+    @apply bg-foundry text-aluminum antialiased;
+    font-family: var(--font-body);
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+  }
+
+  code, pre, .font-mono {
+    font-family: var(--font-mono);
+  }
+}
+
+/* ── Scrollbar ──────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-aluminum-dim); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-aluminum); }
+
+/* ── Status Indicator ───────────────────────────────────── */
+@keyframes indicator-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 currentColor; }
+  50% { box-shadow: 0 0 6px 2px currentColor; }
+}
+.indicator-active {
+  animation: indicator-pulse 2s ease-in-out infinite;
+}
+
+/* ── Pipeline flow particles ────────────────────────────── */
+@keyframes flow-right {
+  from { transform: translateX(-8px); opacity: 0; }
+  30%  { opacity: 1; }
+  70%  { opacity: 1; }
+  to   { transform: translateX(8px); opacity: 0; }
+}
+.pipeline-particle {
+  animation: flow-right 1.8s ease-in-out infinite;
+}
+
+/* ── Subtle card hover ──────────────────────────────────── */
+.card-hover {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.card-hover:hover {
+  border-color: var(--color-molten);
+  box-shadow: 0 0 12px -4px rgba(212, 168, 67, 0.15);
+}
