@@ -22,19 +22,19 @@ init:
 # Limpieza radical de binarios y mapas de logs residuales
 clean:
 	rm -f $(TARGET)
-	rm -rf logs/*.log
+	rm -rf logs/*.log logs/*.csv
 
 # Ejecución estándar garantizando la purga de registros previos
 run: all init
 	@echo "Purgando registros de simulaciones anteriores..."
-	rm -f logs/*.log
+	rm -f logs/*.log logs/*.csv
 	@echo "Iniciando CoreOS-Sim de forma silenciosa..."
 	./$(TARGET)
 
 # Despliegue automatizado multipanel en terminales independientes (Tmux)
 monitor: all init
 	@echo "Purgando registros de simulaciones anteriores..."
-	rm -f logs/*.log
+	rm -f logs/*.log logs/*.csv
 	@tmux kill-session -t coreos_monitor > /dev/null 2>&1 || true
 	@echo "Lanzando el Kernel Administrador en segundo plano sin fugas..."
 	./$(TARGET) > logs/kernel.log 2>&1 &

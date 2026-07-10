@@ -21,6 +21,21 @@ static const int SLEEP_MS = 1500;
 // Candado para logs dentro del proceso de logística
 static mutex candado_logistica;
 
+// Recursos y funciones de registro CSV para Fase 2
+static ofstream csv_f2;
+static mutex csv_mutex_f2;
+static auto start_time_f2 = chrono::steady_clock::now();
+
+static void log_csv_f2(const string &event, int celda_id, float cantidad, float silo_restante) {
+    lock_guard<mutex> lock(csv_mutex_f2);
+    if (!csv_f2.is_open()) {
+        csv_f2.open("logs/fase2_logistica.csv", ios::out | ios::trunc);
+        csv_f2 << "timestamp_ms,evento,celda_id,cantidad_enviada,silo_alumina_restante\n" << flush;
+    }
+    auto elapsed = chrono::duration_cast<chrono::milliseconds>(chrono::steady_clock::now() - start_time_f2).count();
+    csv_f2 << elapsed << "," << event << "," << celda_id << "," << cantidad << "," << silo_restante << "\n" << flush;
+}
+
 // Manejador de señal
 static void recibir_signal_apagado_f2(int sig) {
     if (sig == SIGTERM) {
@@ -39,6 +54,7 @@ namespace Industrial {
             exit(1);
         }
         log_file << "=== INITIALIZATION OF LOGISTICAL LOG (PHASE 2) ===\n" << std::flush;
+        log_csv_f2("INICIADO", 0, 0.0f, SILO_ALUMINA_GLOBAL);
 
         cout << "\n>>> [PROCESO] INICIANDO FASE 2: LOGÍSTICA Y TRANSPORTE (SIMULADA) - PID: " << getpid() << " <<<\n\n";
 
@@ -58,6 +74,7 @@ namespace Industrial {
                             log_file << "[Logística] RELLENANDO Celda #" << (i + 1)
                                      << " | Cantidad: " << cantidad_a_enviar << " kg | Silo Restante: " 
                                      << SILO_ALUMINA_GLOBAL << " kg\n" << std::flush;
+                            log_csv_f2("RELLENANDO", i + 1, cantidad_a_enviar, SILO_ALUMINA_GLOBAL);
                         }
 
                         // simular tiempo de transferencia neumática
@@ -71,7 +88,10 @@ namespace Industrial {
         }
 
         log_file << "[Logística] Finalizando proceso de logística.\n" << std::flush;
+        log_csv_f2("FINALIZADO", 0, 0.0f, SILO_ALUMINA_GLOBAL);
+        
         log_file.close();
+        if (csv_f2.is_open()) csv_f2.close();
         exit(0);
     }
 
