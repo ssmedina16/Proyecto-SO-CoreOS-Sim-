@@ -1,90 +1,91 @@
 #include <iostream>
 #include <thread>
 #include <chrono>
-#include <unistd.h>   // Requerido para fork() y pid_t
-#include <signal.h>   // Requerido para señales del SO (kill, SIGTERM)
-#include <sys/wait.h> // Requerido para waitpid()
+#include <vector>
+#include <csignal>
 #include "../include/industrial/fases_produccion.hpp"
-// no IPC POSIX aquí; mantener includes mínimos
+#include "../include/kernel/memoria_virtual.hpp"
+#include "../include/kernel/planificador.hpp"
+#include "../include/kernel/wrappers.hpp"
+#include "../include/kernel/sincronizacion.hpp"
 
 using namespace std;
 
-// Variables de control globales (utilizadas principalmente por el Padre)
+// Puntero global mapeado a la memoria compartida de la planta
+Industrial::MemoriaCompartidaPlanta* Industrial::shared_planta = nullptr;
+
+// Control atómico global del ciclo de vida del Kernel
 volatile sig_atomic_t system_running = 1;
 
-// Inicialización de IPC para silo y tolvas
-// init_ipc_silo_tolvas removed per request; no shared silo/tolvas in main
-
 /**
- * Manejador genérico para el proceso padre (Kernel).
+ * Capturador de señales del SO (SIGINT/SIGTERM) para apagado controlado
  */
-void interceptar_apagado_padre(int sig)
-{
-    if (sig == SIGTERM || sig == SIGINT)
-    {
+void interceptar_apagado_padre(int sig) {
+    if (sig == SIGTERM || sig == SIGINT) {
         system_running = 0;
     }
 }
 
-int main()
-{
-    std::cout << ">>> [KERNEL] INICIANDO COREOS-SIM (ARQUITECTURA MULTIPROCESO) <<<\n"
-              << std::endl;
+int main() {
+    std::cout << ">>> [KERNEL] INICIANDO COREOS-SIM (ARQUITECTURA ULTRA-MODULAR CON MLFQ) <<<\n" << std::endl;
 
-    // Configuración de señal para el padre
+    // Configuración de señales
     signal(SIGTERM, interceptar_apagado_padre);
     signal(SIGINT, interceptar_apagado_padre);
 
-    // No se inicializa IPC POSIX; la Fase 2 opera de forma local/simulada
-
-    // 1. LANZAMIENTO DE LA FASE 1: PLANTA DE CARBÓN (SANTIAGO)
-    pid_t pid_plantaCarbon = fork();
-
-    if (pid_plantaCarbon == 0)
-    {
-        // PROCESO HIJO: Planta de Carbón
-        // El hijo configura sus propios handlers dentro de su .cpp
-        Industrial::fase_planta_carbon();
-        return 0;
+    // Inicialización física de la memoria virtual en RAM
+    Industrial::shared_planta = (Industrial::MemoriaCompartidaPlanta*)Industrial::inicializar_memoria_virtual();
+    if (Industrial::shared_planta == nullptr || Industrial::shared_planta == (void*)-1) {
+        std::cerr << "Error crítico: No se pudo inicializar la memoria compartida virtual." << std::endl;
+        return 1;
     }
 
-    // 2. LANZAMIENTO DE LA FASE 2: LOGÍSTICA Y TRANSPORTE
-    pid_t pid_logistica = fork();
-    if (pid_logistica == 0) {
-        // PROCESO HIJO: Logística y Transporte
-        Industrial::fase_logistica_transporte();
-        return 0;
+    // 1. Instanciación única del Planificador jerárquico
+    MLFQScheduler planificador;
+
+    // 2. Lanzamiento del hilo maestro de la CPU Virtual
+    std::thread thread_kernel(&MLFQScheduler::runScheduler, &planificador);
+
+    // 3. Lanzamiento limpio de hilos industriales llamando a los Wrappers externos
+    std::vector<std::thread> hilos_sistema;
+    hilos_sistema.push_back(std::thread(Industrial::wrapper_fase1_carbon, std::ref(planificador)));
+    hilos_sistema.push_back(std::thread(Industrial::wrapper_fase2_logistica, std::ref(planificador)));
+    hilos_sistema.push_back(std::thread(Industrial::wrapper_fase3_fase4_celdas, std::ref(planificador)));
+    hilos_sistema.push_back(std::thread(Industrial::wrapper_fase5_trasiego, std::ref(planificador)));
+
+    // 4. Lanzamiento del hilo supervisor de Inanición (Priority Boosting)
+    std::thread thread_boost([&planificador]() {
+        while (system_running) {
+            // Duerme 10 veces 1 segundo
+            for (int i = 0; i < 10; ++i) {
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+                if (!system_running) return; // Sale inmediatamente si el Kernel ordena apagar
+            }
+            
+            std::cout << "\n >>> [KERNEL]: Alarma de envejecimiento activada. Forzando Priority Boost global... <<<\n";
+            planificador.forzarRetornoPrioridad();
+        }
+    });
+
+    // Duración de la simulación activa (25 segundos)
+    std::this_thread::sleep_for(std::chrono::seconds(25));
+    
+    std::cout << "\n[Kernel]: Tiempo de simulación concluido. Solicitando apagado general de hilos...\n";
+    system_running = 0;
+
+    // Unir todos los hilos de manera segura para evitar fugas de contexto
+    if (thread_kernel.joinable()) thread_kernel.join();
+    if (thread_boost.joinable()) thread_boost.join();
+    for (auto& th : hilos_sistema) {
+        if (th.joinable()) th.join();
     }
 
-    // 3. LANZAMIENTO DE LA FASE 3: CELDAS DE REDUCCIÓN (JP)
-    pid_t pid_celdasElectroliticas = fork();
+    // Diagnóstico del motor de sincronización antes del cierre
+    KernelSyncEngine::getInstance().imprimirDiagnostico();
 
-    if (pid_celdasElectroliticas == 0)
-    {
-        // PROCESO HIJO: Celdas de Reducción
-        Industrial::fase_celdas_reduccion(5);
-        return 0;
-    }
+    // Desmapear memoria virtual y limpiar enlace del SO
+    Industrial::liberar_memoria_virtual();
 
-    // ===============================================
-    // CÓDIGO DEL PROCESO PADRE (Kernel Administrador)
-    // ===============================================
-
-    // El Kernel espera 15 segundos simulando la jornada industrial
-    this_thread::sleep_for(chrono::seconds(15));
-
-    cout << "\n[Kernel] Tiempo de simulación concluido. Enviando señales de apagado...\n";
-
-    // Enviamos SIGTERM a los hijos para que sus handlers internos actúen de forma autónoma
-    if (pid_plantaCarbon > 0) kill(pid_plantaCarbon, SIGTERM);
-    if (pid_logistica > 0) kill(pid_logistica, SIGTERM);
-    if (pid_celdasElectroliticas > 0) kill(pid_celdasElectroliticas, SIGTERM);
-
-    // Limpieza de procesos (evitar zombies)
-    waitpid(pid_plantaCarbon, nullptr, 0);
-    waitpid(pid_logistica, nullptr, 0);
-    waitpid(pid_celdasElectroliticas, nullptr, 0);
-
-    cout << "[Kernel] Todos los procesos industriales detenidos. Sistema finalizado." << endl;
+    std::cout << "[Kernel]: Simulación finalizada correctamente. Memoria liberada." << std::endl;
     return 0;
 }
