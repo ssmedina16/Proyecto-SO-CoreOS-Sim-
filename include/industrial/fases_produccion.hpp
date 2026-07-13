@@ -3,16 +3,10 @@
 
 #include <mutex>
 #include <fstream>
+#include "../kernel/sincronizacion.hpp"
 
 namespace Industrial
 {
-    // Inventario para comunicación Fase 3 - Fase 4
-    struct InventarioAmbiental
-    {
-        float gases_acumulados = 0.0f;
-        float alumina_enriquecida = 0.0f;
-    };
-
     // Fase 1: Planta de Carbón
     //------------------------------------------------------------
     struct EstadoPlanta
@@ -48,22 +42,58 @@ namespace Industrial
     };
 
     void fase_celdas_reduccion(int cantidad_celdas);
-    void Hilo_Celda(EstadoCelda &mi_estado, InventarioAmbiental &env, std::mutex &mtx, std::ofstream &log_file);
+    void Hilo_Celda(EstadoCelda &mi_estado, std::mutex &mtx, std::ofstream &log_file);
     //--------------------------------------------------------------
 
     // Fase 4: Reciclaje GTC
     //--------------------------------------------------------------
-    void fase_reciclaje_gtc(InventarioAmbiental &env, std::mutex &mtx);
+    void fase_reciclaje_gtc(std::mutex &mtx);
     //--------------------------------------------------------------
 
-    // Interconexión Fase 2 -> Fase 3 --- VARIABLES DE CONEXIÓN ENTRE PROCESOS ---
-    inline float SILO_ALUMINA_GLOBAL = 50000.0f;
+    /** 
+     * @brief Estructura de Memoria Virtual Compartida POSIX (IPC)
+     * Unifica los recursos compartidos entre procesos independientes (Fase 1, 2 y 3) en RAM real.
+     */
+    struct MemoriaCompartidaPlanta {
+        float silo_alumina;        // Inventario global gestionado por Fase 2
+        float tolvas_celdas[5];    // Tolvas de alúmina para cada celda (Fase 2 -> Fase 3)
+        int anodos_producidos;     // Stock de ánodos listos (Fase 1 -> Fase 3)
+        
+        // --- Integración Fase 4 (Reciclaje GTC y Garbage Collection) ---
+        float gases_acumulados;      // Gases emitidos por las celdas (basura a recolectar por Fase 4)
+        float alumina_enriquecida;   // Materia prima reciclada lista para usarse en las celdas
+
+        // --- Integración Fase 5 ---
+        float aluminio_producido[5]; // Aluminio líquido acumulado en cada celda (Fase 3 -> Fase 5)
+    };
+
+    /** 
+     * @brief Puntero global a la memoria compartida mapeada.
+     * Debe ser inicializado en main.cpp mediante shm_open y mmap.
+     */
+    extern MemoriaCompartidaPlanta* shared_planta;
+
     inline const int MAX_CELDAS = 5;
-    // Las tolvas de las 5 celdas empezarán vacías para probar la conexión
-    inline float TOLVAS_CELDAS_GLOBAL[MAX_CELDAS] = {400.0f, 400.0f, 400.0f, 400.0f, 400.0f};
 
     // Fase 5: Trasiego del Crisol
-    // void fase_trasiego_crisol();
+    //--------------------------------------------------------------
+    struct EstadoCrisol
+    {
+        int id_crisol;
+        float capacidad_max = 6000.0f;       // Umbral crítico de succión (6 toneladas lógicas)
+        float aluminio_recolectado = 0.0f;   // Registro del material consolidado
+        bool en_operacion = false;           // Semáforo interno de ejecución
+    };
+
+    // Puntero al KMutex del motor de kernel que restringe el acceso al canal físico de extracción
+    extern KMutex* kmutex_crisol_succion;
+
+    // Proceso Global de Logística
+    void fase_trasiego_crisol(int cantidad_crisoles, EstadoCelda* celdas, int cantidad_celdas);
+    
+    // Unidad Ligera de Ejecución (Hilo del Crisol)
+    void Hilo_Crisol(EstadoCrisol &mi_estado, EstadoCelda* celdas, int cantidad_celdas);
+    //--------------------------------------------------------------
 }
 
 #endif

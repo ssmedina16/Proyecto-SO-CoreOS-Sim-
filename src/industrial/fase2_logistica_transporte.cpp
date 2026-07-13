@@ -29,70 +29,72 @@ static auto start_time_f2 = chrono::steady_clock::now();
 static void log_csv_f2(const string &event, int celda_id, float cantidad, float silo_restante) {
     lock_guard<mutex> lock(csv_mutex_f2);
     if (!csv_f2.is_open()) {
-        csv_f2.open("logs/fase2_logistica.csv", ios::out | ios::trunc);
-        csv_f2 << "timestamp_ms,evento,celda_id,cantidad_enviada,silo_alumina_restante\n" << flush;
+        bool is_empty = false;
+        {
+            ifstream check("logs/fase2_logistica.csv");
+            if (!check || check.peek() == ifstream::traits_type::eof()) {
+                is_empty = true;
+            }
+        }
+        csv_f2.open("logs/fase2_logistica.csv", ios::out | ios::app);
+        if (is_empty) {
+            csv_f2 << "timestamp_ms,evento,celda_id,cantidad_enviada,silo_alumina_restante\n" << flush;
+        }
     }
     auto elapsed = chrono::duration_cast<chrono::milliseconds>(chrono::steady_clock::now() - start_time_f2).count();
     csv_f2 << elapsed << "," << event << "," << celda_id << "," << cantidad << "," << silo_restante << "\n" << flush;
 }
-
-// Manejador de señal
-static void recibir_signal_apagado_f2(int sig) {
-    if (sig == SIGTERM) {
-        system_running = 0;
-    }
-}
-
 namespace Industrial {
 
     void fase_logistica_transporte() {
-        signal(SIGTERM, recibir_signal_apagado_f2);
+        // !!! bucle while(system_running) ELIMINADO !!!
+        // !!! exit(0) REMOVIDO COMPLETAMENTE !!!
 
-        std::ofstream log_file("logs/fase2_logistica.log", std::ios::out | std::ios::trunc);
+        // Cambiado a ios::app para acumular las transferencias a lo largo de la simulación
+        std::ofstream log_file("logs/fase2_logistica.log", std::ios::out | std::ios::app);
         if (!log_file.is_open()) {
-            std::cerr << "Critical Error: Could not create Phase 2 log file." << std::endl;
-            exit(1);
+            std::cerr << "Error Crítico: No se pudo abrir el archivo de log de Logística." << std::endl;
+            return;
         }
-        log_file << "=== INITIALIZATION OF LOGISTICAL LOG (PHASE 2) ===\n" << std::flush;
-        log_csv_f2("INICIADO", 0, 0.0f, SILO_ALUMINA_GLOBAL);
+        float silo_val = shared_planta ? shared_planta->silo_alumina : 0.0f;
+        log_csv_f2("INICIADO", 0, 0.0f, silo_val);
 
-        cout << "\n>>> [PROCESO] INICIANDO FASE 2: LOGÍSTICA Y TRANSPORTE (SIMULADA) - PID: " << getpid() << " <<<\n\n";
+        {
+            lock_guard<mutex> lg(candado_logistica);
+            cout << "[Logística] [DMA Scan] Escaneando mapa de tolvas en memoria compartida...\n";
+        }
 
-        // Bucle principal iterativo (escaneo de tolvas globales)
-        while (system_running) {
+        if (shared_planta != nullptr) {
             for (int i = 0; i < MAX_CELDAS; ++i) {
-                if (TOLVAS_CELDAS_GLOBAL[i] < 500.0f) {
-                    float cantidad_a_enviar = 1000.0f - TOLVAS_CELDAS_GLOBAL[i];
+                if (shared_planta->tolvas_celdas[i] < 500.0f) {
+                    float nivel_actual = shared_planta->tolvas_celdas[i];
+                    float cantidad_a_enviar = 1000.0f - nivel_actual;
 
-                    if (SILO_ALUMINA_GLOBAL >= cantidad_a_enviar) {
-                        SILO_ALUMINA_GLOBAL -= cantidad_a_enviar;
-                        TOLVAS_CELDAS_GLOBAL[i] += cantidad_a_enviar;
+                    if (shared_planta->silo_alumina >= cantidad_a_enviar) {
+                        shared_planta->silo_alumina -= cantidad_a_enviar;
+                        shared_planta->tolvas_celdas[i] += cantidad_a_enviar;
 
                         {
-                            // proteger logs con mutex
                             lock_guard<mutex> lg(candado_logistica);
-                            log_file << "[Logística] RELLENANDO Celda #" << (i + 1)
-                                     << " | Cantidad: " << cantidad_a_enviar << " kg | Silo Restante: " 
-                                     << SILO_ALUMINA_GLOBAL << " kg\n" << std::flush;
-                            log_csv_f2("RELLENANDO", i + 1, cantidad_a_enviar, SILO_ALUMINA_GLOBAL);
+                            log_file << "[Logística] [ALERTA] Celda #" << (i + 1) << " requiere reabastecimiento. Nivel actual: " << nivel_actual << " kg (Umbral < 500kg).\n"
+                                     << "[Logística] [IPC] Retirando recursos del Silo Central. [Silo SHM Restante: " << shared_planta->silo_alumina << " kg]\n"
+                                     << "[Logística] [TRANSFERENCIA OK] Inyectando recursos en la dirección de memoria de la Celda #" << (i + 1) << ". [Tolva SHM: " << shared_planta->tolvas_celdas[i] << " kg]\n"
+                                     << "---------------------------------------------------------\n" << std::flush;
+                            
+                            cout << "[Logística] [ALERTA] Inyectando recursos neumáticos en Celda #" << (i + 1) << "\n";
+                            log_csv_f2("RELLENANDO", i + 1, cantidad_a_enviar, shared_planta ? shared_planta->silo_alumina : 0.0f);
                         }
 
-                        // simular tiempo de transferencia neumática
-                        this_thread::sleep_for(chrono::milliseconds(800));
+                        // Simula el retardo atómico de la transferencia por este turno
+                        this_thread::sleep_for(chrono::milliseconds(200));
                     }
                 }
             }
-
-            // dormir antes del siguiente ciclo de escaneo
-            this_thread::sleep_for(chrono::milliseconds(SLEEP_MS));
         }
 
         log_file << "[Logística] Finalizando proceso de logística.\n" << std::flush;
-        log_csv_f2("FINALIZADO", 0, 0.0f, SILO_ALUMINA_GLOBAL);
-        
+        log_csv_f2("FINALIZADO", 0, 0.0f, shared_planta ? shared_planta->silo_alumina : 0.0f);
         log_file.close();
-        if (csv_f2.is_open()) csv_f2.close();
-        exit(0);
     }
 
 } 
