@@ -67,8 +67,8 @@ int main() {
         }
     });
 
-    // Duración de la simulación activa (25 segundos)
-    std::this_thread::sleep_for(std::chrono::seconds(25));
+    // Duración de la simulación activa (90 segundos — suficiente para varios ciclos completos de todas las fases)
+    std::this_thread::sleep_for(std::chrono::seconds(90));
     
     std::cout << "\n[Kernel]: Tiempo de simulación concluido. Solicitando apagado general de hilos...\n";
     system_running = 0;

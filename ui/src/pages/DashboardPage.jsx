@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Flame, Truck, Layers, Wind, ArrowRight } from 'lucide-react';
+import { Flame, Truck, Layers, Wind, Container, ArrowRight } from 'lucide-react';
 import { useSimCtx } from '../context/SimulationContext';
 import MetricCard from '../components/common/MetricCard';
 import StatusIndicator from '../components/common/StatusIndicator';
@@ -28,7 +28,9 @@ function PhaseSummary({ title, icon: Icon, status, to, children }) {
 export default function DashboardPage() {
   const ctx = useSimCtx();
   const totalAl = ctx.cells.reduce((a, c) => a + c.aluminio, 0);
-  const lowCells = ctx.cells.filter(c => c.alumina < 200 || c.carbon < 45).length;
+  const lowCells = ctx.cells.filter(c => c.alumina < 200 || c.carbon < 1).length;
+  const totalRecolectado = ctx.crucibles.reduce((a, c) => a + c.nivel, 0);
+  const vaciados = ctx.phase5Events.filter(e => e.tipo === 'vaciado').length;
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -112,16 +114,48 @@ export default function DashboardPage() {
           status={ctx.gtcState === 'CAPTURANDO' ? 'active' : ctx.gtcState === 'MONITOREANDO' ? 'warning' : 'idle'}
           to="/fase-4"
         >
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-foundry rounded-lg p-3 border border-surface-line text-center">
-              <p className="text-[9px] text-aluminum-dim uppercase font-semibold">Gases capturados</p>
-              <p className="font-mono font-bold text-process-green text-sm">{ctx.capturedGas.toFixed(0)} kg</p>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="bg-foundry rounded-lg p-2.5 border border-surface-line text-center">
+              <p className="text-[9px] text-aluminum-dim uppercase font-semibold">Gases Capturados</p>
+              <p className="font-mono font-bold text-process-green text-xs">{ctx.capturedGas.toFixed(0)} kg</p>
             </div>
-            <div className="bg-foundry rounded-lg p-3 border border-surface-line text-center">
-              <p className="text-[9px] text-aluminum-dim uppercase font-semibold">Al. enriquecida</p>
-              <p className="font-mono font-bold text-electrolyte text-sm">{ctx.enrichedAlumina.toFixed(0)} kg</p>
+            <div className="bg-foundry rounded-lg p-2.5 border border-surface-line text-center">
+              <p className="text-[9px] text-aluminum-dim uppercase font-semibold">Eco Al. Generada</p>
+              <p className="font-mono font-bold text-electrolyte text-xs">{(ctx.enrichedAluminaProduced || 0).toFixed(0)} kg</p>
+            </div>
+            <div className="bg-foundry rounded-lg p-2.5 border border-surface-line text-center bg-molten/5 border-molten/20">
+              <p className="text-[9px] text-molten uppercase font-semibold">Stock RAM</p>
+              <p className="font-mono font-bold text-molten text-xs">{(ctx.enrichedAluminaStock || 0).toFixed(0)} kg</p>
             </div>
           </div>
+        </PhaseSummary>
+
+        {/* Phase 5 */}
+        <PhaseSummary
+          title="Trasiego del Crisol y Fundición"
+          icon={Container}
+          status={ctx.phase5State === 'OPERANDO' ? 'active' : 'idle'}
+          to="/fase-5"
+        >
+          <div className="grid grid-cols-3 gap-2">
+            {ctx.crucibles.map(cr => (
+              <div key={cr.id} className="bg-foundry rounded-lg p-2.5 border border-surface-line text-center">
+                <p className="text-[9px] text-aluminum-dim uppercase font-semibold">Crisol #{cr.id}</p>
+                <p className="font-mono font-bold text-molten text-xs">{cr.nivel.toFixed(0)} kg</p>
+              </div>
+            ))}
+            <div className="bg-foundry rounded-lg p-2.5 border border-surface-line text-center bg-molten/5 border-molten/20">
+              <p className="text-[9px] text-molten uppercase font-semibold">Lingotes</p>
+              <p className="font-mono font-bold text-process-green text-xs">{ctx.ingots || 0} pzs</p>
+            </div>
+          </div>
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="text-aluminum-dim">Lingotes de Aluminio producidos</span>
+            <span className="font-mono font-bold text-process-green">{((ctx.ingots || 0) * 100).toLocaleString()} kg</span>
+          </div>
+          <p className="text-[11px] text-aluminum-dim">
+            {vaciados} vaciado{vaciados !== 1 ? 's' : ''} de celda y {ctx.ingots || 0} lingote{(ctx.ingots || 0) !== 1 ? 's' : ''} moldeado{(ctx.ingots || 0) !== 1 ? 's' : ''}
+          </p>
         </PhaseSummary>
       </div>
     </div>

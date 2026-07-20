@@ -1,20 +1,20 @@
 import MetricCard from '../common/MetricCard';
 import { Wind, Beaker } from 'lucide-react';
 
-export function GasRecoveryPanel({ capturedGas, enrichedAlumina, gtcState }) {
+export function GasRecoveryPanel({ capturedGas, enrichedAluminaProduced = 0, enrichedAluminaStock = 0, gtcState }) {
   return (
     <div className="bg-steel rounded-xl border border-surface-line p-5 flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-bold font-display text-white uppercase tracking-wider">Sistema GTC</h3>
-        <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded-full border ${
-          gtcState === 'CAPTURANDO' ? 'bg-process-green/10 text-process-green border-process-green/30 animate-pulse' :
-          gtcState === 'MONITOREANDO' ? 'bg-molten/10 text-molten border-molten/30' :
-          'bg-graphite text-aluminum-dim border-surface-line'
-        }`}>{gtcState}</span>
+        <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded-full border ${gtcState === 'CAPTURANDO' ? 'bg-process-green/10 text-process-green border-process-green/30 animate-pulse' :
+            gtcState === 'MONITOREANDO' ? 'bg-molten/10 text-molten border-molten/30' :
+              'bg-graphite text-aluminum-dim border-surface-line'
+          }`}>{gtcState}</span>
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <MetricCard label="Gases capturados" value={capturedGas.toFixed(0)} unit="kg" accent="green" icon={Wind} />
-        <MetricCard label="Alúmina enriquecida" value={enrichedAlumina.toFixed(0)} unit="kg" accent="electrolyte" icon={Beaker} />
+        <MetricCard label="Alúmina Enriquecida Generada" value={enrichedAluminaProduced.toFixed(0)} unit="kg" accent="electrolyte" icon={Beaker} />
+        <MetricCard label="Stock Disponible" value={enrichedAluminaStock.toFixed(0)} unit="kg" accent="molten" icon={Beaker} />
       </div>
     </div>
   );

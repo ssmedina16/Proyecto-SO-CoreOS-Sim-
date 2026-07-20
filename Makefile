@@ -24,11 +24,17 @@ clean:
 	rm -f $(TARGET)
 	rm -rf logs/*.log logs/*.csv
 
-# Ejecución estándar garantizando la purga de registros previos
+# Ejecución estándar — NO borra logs aquí (el servidor Node lo gestiona antes de arrancar)
 run: all init
-	@echo "Purgando registros de simulaciones anteriores..."
+	@echo "Iniciando CoreOS-Sim..."
+	./$(TARGET)
+
+# Limpieza manual de logs (usar solo desde terminal, no desde el servidor)
+clean-logs:
 	rm -f logs/*.log logs/*.csv
-	@echo "Iniciando CoreOS-Sim de forma silenciosa..."
+
+# Ejecución directa sin recompilar (para el servidor Node)
+run-only: init
 	./$(TARGET)
 
 # Despliegue automatizado multipanel en terminales independientes (Tmux)

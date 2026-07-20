@@ -6,6 +6,7 @@ import Phase1Page from './pages/Phase1Page';
 import Phase2Page from './pages/Phase2Page';
 import Phase3Page from './pages/Phase3Page';
 import Phase4Page from './pages/Phase4Page';
+import Phase5Page from './pages/Phase5Page';
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
             <Route path="fase-2" element={<Phase2Page />} />
             <Route path="fase-3" element={<Phase3Page />} />
             <Route path="fase-4" element={<Phase4Page />} />
+            <Route path="fase-5" element={<Phase5Page />} />
           </Route>
         </Routes>
       </BrowserRouter>

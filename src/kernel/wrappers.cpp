@@ -2,6 +2,7 @@
 #include "../../include/industrial/fases_produccion.hpp"
 #include "../../include/kernel/sincronizacion.hpp"
 #include <iostream>
+#include <fstream>
 #include <thread>
 #include <chrono>
 #include <csignal>
@@ -13,55 +14,73 @@ extern volatile sig_atomic_t system_running;
 namespace Industrial {
 
     std::mutex mutex_gtc;
-    
+
+    // ── Recursos de logging CSV para Fase 5 (Trasiego del Crisol) ──
+    static std::ofstream csv_f5;
+    static std::mutex csv_mutex_f5;
+    static auto start_time_f5 = std::chrono::steady_clock::now();
+
+    static void log_csv_f5(const std::string &event, int crisol_id, int celda_id,
+                           float kg_transferidos, float crisol1_nivel, float crisol2_nivel,
+                           int lingotes_totales) {
+        std::lock_guard<std::mutex> lock(csv_mutex_f5);
+        if (!csv_f5.is_open()) {
+            bool is_empty = false;
+            {
+                std::ifstream check("logs/fase5_crisol.csv");
+                if (!check || check.peek() == std::ifstream::traits_type::eof()) {
+                    is_empty = true;
+                }
+            }
+            csv_f5.open("logs/fase5_crisol.csv", std::ios::out | std::ios::app);
+            if (is_empty) {
+                csv_f5 << "timestamp_ms,evento,crisol_id,celda_id,kg_transferidos,crisol1_nivel,crisol2_nivel,lingotes_totales\n" << std::flush;
+            }
+        }
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - start_time_f5).count();
+        csv_f5 << elapsed << "," << event << "," << crisol_id << "," << celda_id << ","
+               << kg_transferidos << "," << crisol1_nivel << "," << crisol2_nivel << "," << lingotes_totales << "\n" << std::flush;
+    }
+
     void wrapper_fase1_carbon(MLFQScheduler& scheduler) {
-        // Nace en la Cola 3 (FCFS) por ser un proceso lento de horneado
-        PCB pcb_fase1 = { 101, "Planta de Carbon", ProcessState::LISTO, 3, 0.0, 25.0 };
+        PCB pcb_fase1 = { 101, "Planta de Carbon", ProcessState::LISTO, 1, 0.0, 15.0 };
         pcb_fase1.estado_compartido = &pcb_fase1.estado;
-        
-        // REGISTRO CORRECTO: Pasamos la dirección de memoria de nuestro PCB local
-        scheduler.encolarProceso(&pcb_fase1, 3);
+        scheduler.encolarProceso(&pcb_fase1, 1);
 
         while (system_running) {
-            // El planificador cambiará el estado de este objeto real a BLOQUEADO al terminar su ráfaga de CPU
             if (pcb_fase1.estado == ProcessState::BLOQUEADO) {
-                
                 std::cout << "\n[KERNEL] -> Despertando Fase 1 en Planta de Carbón...\n";
-                
-                // === LLAMADA A FASE 1 (fases_produccion.hpp) ===
-                // Invoca la función principal de producción de ánodos
-                Industrial::fase_planta_carbon(); 
-                
-                // Re-encolar administrativamente en FCFS tras culminar el ciclo de trabajo físico
-                pcb_fase1.rafaga_estimada = 25.0;
+                Industrial::fase_planta_carbon();
+
+                pcb_fase1.rafaga_estimada = 15.0;
                 pcb_fase1.cambiarEstado(ProcessState::LISTO);
-                scheduler.encolarProceso(&pcb_fase1, 3);
+                scheduler.encolarProceso(&pcb_fase1, 1);
+
+                // Cadencia: Fase 1 produce 4 ánodos rápidamente cada 800 ms
+                std::this_thread::sleep_for(std::chrono::milliseconds(800));
             } else {
-                // Pequeña espera de cortesía (10ms) para no sobrecargar la CPU física de tu equipo
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
         }
     }
 
     void wrapper_fase2_logistica(MLFQScheduler& scheduler) {
-        // Nace en la Cola 2 (SJF) para optimizar el transporte neumático ágil
-        PCB pcb_fase2 = { 201, "Logistica y Transporte", ProcessState::LISTO, 2, 0.0, 8.0 };
+        PCB pcb_fase2 = { 201, "Logistica y Transporte", ProcessState::LISTO, 1, 0.0, 8.0 };
         pcb_fase2.estado_compartido = &pcb_fase2.estado;
-        scheduler.encolarProceso(&pcb_fase2, 2);
+        scheduler.encolarProceso(&pcb_fase2, 1);
 
         while (system_running) {
             if (pcb_fase2.estado == ProcessState::BLOQUEADO) {
-                
-                std::cout << "\n[KERNEL] -> Despertando Fase 2 (Sistema de Logística)...\n";
-
-                // === LLAMADA A FASE 2 (fases_produccion.hpp) ===
-                // Activa el escaneo y reabastecimiento de alúmina en las tolvas
+                std::cout << "\n[KERNEL] -> Despertando Fase 2 (Logística)...\n";
                 Industrial::fase_logistica_transporte();
 
-                // Re-encolar administrativamente en la cola de prioridad de trabajos cortos (SJF)
                 pcb_fase2.rafaga_estimada = 8.0;
                 pcb_fase2.cambiarEstado(ProcessState::LISTO);
-                scheduler.encolarProceso(&pcb_fase2, 2);
+                scheduler.encolarProceso(&pcb_fase2, 1);
+
+                // Cadencia: Logística re-escanea tolvas cada 2 segundos
+                std::this_thread::sleep_for(std::chrono::milliseconds(2000));
             } else {
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
@@ -69,28 +88,23 @@ namespace Industrial {
     }
 
     void wrapper_fase3_fase4_celdas(MLFQScheduler& scheduler) {
-        // Nace en la Cola 1 (Round Robin) para la gestión de misión crítica
-        PCB pcb_fase3 = { 301, "Celdas Reduccion y GTC", ProcessState::LISTO, 1, 0.0, 30.0 };
+        PCB pcb_fase3 = { 301, "Celdas Reduccion y GTC", ProcessState::LISTO, 1, 0.0, 20.0 };
         pcb_fase3.estado_compartido = &pcb_fase3.estado;
         scheduler.encolarProceso(&pcb_fase3, 1);
 
         while (system_running) {
             if (pcb_fase3.estado == ProcessState::BLOQUEADO) {
-                
                 std::cout << "\n[KERNEL] -> Despertando Fase 3 (Celdas) y Fase 4 (GTC)...\n";
 
-                // === LLAMADA A FASE 3 (fases_produccion.hpp) ===
-                // Pasamos MAX_CELDAS (5) tal como solicita el parámetro de tu firma
                 Industrial::fase_celdas_reduccion(Industrial::MAX_CELDAS);
-
-                // === LLAMADA A FASE 4 (fases_produccion.hpp) ===
-                // El sistema de lavado químico procesa los gases emitidos usando el mutex requerido
                 Industrial::fase_reciclaje_gtc(mutex_gtc);
 
-                // Re-encolar administrativamente en Cola 1 para Round Robin continuo
-                pcb_fase3.rafaga_estimada = 30.0;
+                pcb_fase3.rafaga_estimada = 20.0;
                 pcb_fase3.cambiarEstado(ProcessState::LISTO);
                 scheduler.encolarProceso(&pcb_fase3, 1);
+
+                // Cadencia: Electrólisis ocurre cada 2.5 segundos
+                std::this_thread::sleep_for(std::chrono::milliseconds(2500));
             } else {
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
@@ -103,8 +117,6 @@ namespace Industrial {
         pcb_fase5.estado_compartido = &pcb_fase5.estado;
         scheduler.encolarProceso(&pcb_fase5, 1);
 
-        // Registrar el KSemaphore de crisoles en el motor de sincronizacion
-        // (2 crisoles pueden operar en paralelo sobre distintas celdas)
         KernelSyncEngine& ksync = KernelSyncEngine::getInstance();
         ksync.registrarSemaforo(10, "crisoles_disponibles", 2);
 
@@ -117,7 +129,6 @@ namespace Industrial {
             lista_crisoles[i].en_operacion = false;
         }
 
-        // Estructura PCB simulada para el Crisol
         PCB_Venalum pcb_crisol[2];
         for (int i = 0; i < 2; ++i) {
             pcb_crisol[i].PID = (i + 1) + 200; // 201, 202
@@ -129,28 +140,38 @@ namespace Industrial {
             pcb_crisol[i].esperando_por = 0;
         }
 
+        static int lingotes_totales = 0;
+        static int turno_crisol = 0;
+        static int celda_inicio_trasiego = 0;
+
+        // ── Log CSV: Evento de arranque ──
+        log_csv_f5("INICIADO", 0, 0, 0.0f,
+                   lista_crisoles[0].aluminio_recolectado,
+                   lista_crisoles[1].aluminio_recolectado,
+                   lingotes_totales);
+
         while (system_running) {
-            std::this_thread::sleep_for(std::chrono::seconds(6));
-            if (!system_running) break;
-
             if (pcb_fase5.estado == ProcessState::BLOQUEADO) {
-                // --- EJECUCIÓN EXACTA DE LA FASE 5 (TRASIEGO) EN HILOS ---
-                for (int c = 0; c < 2; ++c) {
+                // Alternar crisoles de manera rotativa (Round-Robin entre crisoles)
+                for (int step_c = 0; step_c < 2; ++step_c) {
+                    int c = (turno_crisol + step_c) % 2;
                     lista_crisoles[c].en_operacion = true;
-                    for (int i = 0; i < 5; ++i) {
-                        if (!system_running) break;
 
-                        if (shared_planta != nullptr && shared_planta->aluminio_producido[i] >= lista_crisoles[c].capacidad_max) {
+                    for (int step_i = 0; step_i < 5; ++step_i) {
+                        if (!system_running) break;
+                        int i = (celda_inicio_trasiego + step_i) % 5;
+
+                        // Si la celda tiene >= 200kg de aluminio y el crisol tiene espacio disponible
+                        if (shared_planta != nullptr && shared_planta->aluminio_producido[i] >= 200.0f
+                            && (lista_crisoles[c].aluminio_recolectado + shared_planta->aluminio_producido[i]) <= (lista_crisoles[c].capacidad_max + 100.0f)) {
+                            
                             std::cout << "[Aviso] Hilo_Crisol #" << lista_crisoles[c].id_crisol 
-                                      << " detecta exceso en Celda #" << (i + 1) 
+                                      << " detecta aluminio en Celda #" << (i + 1) 
                                       << " (" << shared_planta->aluminio_producido[i] << " kg)\n";
                             
                             pcb_crisol[c].estado = EstadoProceso::BLOQUEADO;
                             pcb_crisol[c].esperando_por = 1; // 1 = ID de kmutex_crisol_succion
-                            std::cout << "[Kernel OS] PCB PID " << pcb_crisol[c].PID 
-                                      << " cambiado a BLOQUEADO esperando kmutex_crisol_succion (ID: 1)\n";
 
-                            // Exclusion mutua via KernelSyncEngine (detecta deadlocks + herencia de prio)
                             PCB pcb_proxy;
                             pcb_proxy.id              = pcb_crisol[c].PID;
                             pcb_proxy.nombre_fase     = "Hilo_Crisol_" + std::to_string(c + 1);
@@ -169,31 +190,69 @@ namespace Industrial {
                                 lista_crisoles[c].aluminio_recolectado += material_transferido;
 
                                 std::cout << "[Exito] Succion finalizada: " << material_transferido 
-                                          << " kg retirados de la Celda #" << (i + 1) << "\n";
+                                          << " kg retirados de Celda #" << (i + 1) 
+                                          << " por Crisol #" << lista_crisoles[c].id_crisol << "\n";
+
+                                log_csv_f5("VACIADO_CELDA", lista_crisoles[c].id_crisol, i + 1,
+                                           material_transferido,
+                                           lista_crisoles[0].aluminio_recolectado,
+                                           lista_crisoles[1].aluminio_recolectado,
+                                           lingotes_totales);
 
                                 ksync.unlock(1, scheduler);
+                                break;
                             } else {
-                                std::cout << "[KernelSyncEngine] Operacion de vaciado cancelada por prevencion de Deadlock.\n";
+                                log_csv_f5("DEADLOCK_PREVENIDO", lista_crisoles[c].id_crisol, i + 1,
+                                           0.0f,
+                                           lista_crisoles[0].aluminio_recolectado,
+                                           lista_crisoles[1].aluminio_recolectado,
+                                           lingotes_totales);
                             }
-                            break; // Sigue al siguiente crisol/ciclo
                         }
                     }
+
+                    // --- FUNDICIÓN Y MOLDEO DE LINGOTES DE ALUMINIO ---
+                    // 1 Lingote de Aluminio = 100 kg de aluminio líquido succionado
+                    if (lista_crisoles[c].aluminio_recolectado >= 100.0f) {
+                        int nuevos_lingotes = (int)(lista_crisoles[c].aluminio_recolectado / 100.0f);
+                        float metal_moldeado = nuevos_lingotes * 100.0f;
+                        lista_crisoles[c].aluminio_recolectado -= metal_moldeado;
+                        lingotes_totales += nuevos_lingotes;
+
+                        std::cout << "[Fundición] Crisol #" << lista_crisoles[c].id_crisol 
+                                  << " moldeo " << nuevos_lingotes << " lingote(s) de aluminio (" 
+                                  << metal_moldeado << " kg). [Total Lingotes: " << lingotes_totales << "]\n";
+
+                        log_csv_f5("MOLDEO_LINGOTE", lista_crisoles[c].id_crisol, 0,
+                                   metal_moldeado,
+                                   lista_crisoles[0].aluminio_recolectado,
+                                   lista_crisoles[1].aluminio_recolectado,
+                                   lingotes_totales);
+                    }
+
                     lista_crisoles[c].en_operacion = false;
                 }
 
-                // Re-encolar en planificador
+                turno_crisol = (turno_crisol + 1) % 2;
+                celda_inicio_trasiego = (celda_inicio_trasiego + 1) % 5;
+
                 pcb_fase5.rafaga_estimada = 15.0;
                 pcb_fase5.cambiarEstado(ProcessState::LISTO);
                 scheduler.encolarProceso(&pcb_fase5, 1);
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+            } else {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
         }
 
-        // Resumen final de recolección al apagar
-        std::cout << "[Logística y Trasiego] Resumen de recolección de Crisoles:\n";
-        for (int i = 0; i < 2; ++i) {
-            std::cout << "  * Crisol #" << lista_crisoles[i].id_crisol 
-                      << ": " << lista_crisoles[i].aluminio_recolectado << " kg recolectados.\n";
-        }
-        std::cout << "[Logística y Trasiego] Proceso finalizado.\n";
+        // ── Log CSV: Evento de finalización ──
+        log_csv_f5("FINALIZADO", 0, 0, 0.0f,
+                   lista_crisoles[0].aluminio_recolectado,
+                   lista_crisoles[1].aluminio_recolectado,
+                   lingotes_totales);
+        if (csv_f5.is_open()) csv_f5.close();
+
+        std::cout << "[Fundición] Resumen final: " << lingotes_totales << " lingotes de aluminio producidos.\n";
     }
-}
+}

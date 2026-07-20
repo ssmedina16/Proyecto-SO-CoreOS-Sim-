@@ -3,7 +3,7 @@ import { useSimCtx } from '../context/SimulationContext';
 import { GasRecoveryPanel, GtcEventLog } from '../components/phase4/GasRecoveryPanel';
 
 export default function Phase4Page() {
-  const { gtcState, capturedGas, enrichedAlumina, phase4Events, gases } = useSimCtx();
+  const { gtcState, capturedGas, enrichedAluminaProduced, enrichedAluminaStock, phase4Events, gases } = useSimCtx();
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -17,7 +17,12 @@ export default function Phase4Page() {
         </p>
       </div>
 
-      <GasRecoveryPanel capturedGas={capturedGas} enrichedAlumina={enrichedAlumina} gtcState={gtcState} />
+      <GasRecoveryPanel
+        capturedGas={capturedGas}
+        enrichedAluminaProduced={enrichedAluminaProduced}
+        enrichedAluminaStock={enrichedAluminaStock}
+        gtcState={gtcState}
+      />
 
       {/* Gases pending capture */}
       <div className="bg-steel rounded-xl border border-surface-line p-5">
