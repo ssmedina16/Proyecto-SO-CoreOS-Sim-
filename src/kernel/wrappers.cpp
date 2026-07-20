@@ -212,8 +212,9 @@ namespace Industrial {
                     }
 
                     // --- FUNDICIÓN Y MOLDEO DE LINGOTES DE ALUMINIO ---
+                    // El crisol debe ACUMULAR aluminio hasta alcanzar su capacidad máxima antes de fundir.
                     // 1 Lingote de Aluminio = 100 kg de aluminio líquido succionado
-                    if (lista_crisoles[c].aluminio_recolectado >= 100.0f) {
+                    if (lista_crisoles[c].aluminio_recolectado >= lista_crisoles[c].capacidad_max) {
                         int nuevos_lingotes = (int)(lista_crisoles[c].aluminio_recolectado / 100.0f);
                         float metal_moldeado = nuevos_lingotes * 100.0f;
                         lista_crisoles[c].aluminio_recolectado -= metal_moldeado;

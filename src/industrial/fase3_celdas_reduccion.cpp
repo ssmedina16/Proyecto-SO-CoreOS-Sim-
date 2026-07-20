@@ -45,6 +45,8 @@ namespace Industrial
     void Hilo_Celda(EstadoCelda &mi_estado, mutex &mtx, ofstream &log_file)
     {
         float alumina_req = 200.0f;
+        float carbon_por_ciclo = 10.0f;   // Desgaste del ánodo por ciclo de reducción
+        float carbon_min_alarma = 45.0f;  // Umbral de reposición del ánodo
         bool produccion_ok = false;
         bool consumida_enriquecida = false;
 
@@ -56,10 +58,24 @@ namespace Industrial
                     lock_guard<mutex> log_lock(candado_log_f3);
                     log_file << "[Celda #" << mi_estado.id_celda << "] [SHM Read] Leyendo memoria compartida -> Ánodos listos: " 
                              << shared_planta->anodos_producidos << " | Alúmina Eco: " 
-                             << shared_planta->alumina_enriquecida << " kg\n" << flush;
+                             << shared_planta->alumina_enriquecida << " kg | Carbón local: "
+                             << mi_estado.anodo_carbon_kg << " kg\n" << flush;
                 }
 
-                if (shared_planta->anodos_producidos >= 1) {
+                // Reposición del ánodo local: si cae por debajo del umbral de alarma,
+                // consumir 1 ánodo global del inventario para reemplazar el ánodo desgastado
+                if (mi_estado.anodo_carbon_kg < carbon_min_alarma && shared_planta->anodos_producidos >= 1) {
+                    shared_planta->anodos_producidos--;
+                    mi_estado.anodo_carbon_kg = 200.0f;
+                    lock_guard<mutex> log_lock(candado_log_f3);
+                    log_file << "[Celda #" << mi_estado.id_celda << "] [ANODO REPUESTO] Carbón bajo (< "
+                             << carbon_min_alarma << " kg). Consumiendo 1 ánodo del stock global. "
+                             << "Carbón local reiniciado a 200 kg. Stock global restante: "
+                             << shared_planta->anodos_producidos << "\n" << flush;
+                }
+
+                // La celda puede producir si tiene suficiente carbón local y alumina disponible
+                if (mi_estado.anodo_carbon_kg >= carbon_por_ciclo) {
                     float eco_disponible = shared_planta->alumina_enriquecida;
                     float tolva_disponible = shared_planta->tolvas_celdas[mi_estado.id_celda - 1];
 
@@ -69,13 +85,16 @@ namespace Industrial
 
                         shared_planta->alumina_enriquecida -= tomar_eco;
                         shared_planta->tolvas_celdas[mi_estado.id_celda - 1] -= tomar_tolva;
-                        shared_planta->anodos_producidos--;
+
+                        // Consumir carbón del ánodo local (desgaste por ciclo)
+                        mi_estado.anodo_carbon_kg -= carbon_por_ciclo;
                         produccion_ok = true;
                         if (tomar_eco > 0) consumida_enriquecida = true;
 
                         lock_guard<mutex> log_lock(candado_log_f3);
                         log_file << "[Celda #" << mi_estado.id_celda << "] [RECURSO CONSUMIDO] Alúmina: "
-                                 << tomar_eco << " kg Enriquecida (GTC) + " << tomar_tolva << " kg Tolva. Ánodo consumido.\n" << flush;
+                                 << tomar_eco << " kg Enriquecida (GTC) + " << tomar_tolva
+                                 << " kg Tolva. Carbón local: " << mi_estado.anodo_carbon_kg << " kg.\n" << flush;
                     }
                 }
             }
@@ -96,35 +115,36 @@ namespace Industrial
             }
 
             lock_guard<mutex> log_lock(candado_log_f3);
-            log_file << "[Celda #" << mi_estado.id_celda << "] >>> NÚCLEO DE ELECTRÓLISIS ACTIVO <<< | Reducción Exitosa | Ánodo Consumido | Aluminio Líquido Acumulado: " 
+            log_file << "[Celda #" << mi_estado.id_celda << "] >>> NÚCLEO DE ELECTRÓLISIS ACTIVO <<< | Reducción Exitosa | Carbón: "
+                     << mi_estado.anodo_carbon_kg << " kg | Aluminio Líquido Acumulado: " 
                      << mi_estado.aluminio_producido << " kg | [SHM Gases Inyectados: +50kg]\n"
                      << "---------------------------------------------------------\n" << flush;
             
             cout << "[Celda #" << mi_estado.id_celda << "] Reducción de aluminio completada con éxito.\n";
 
             float alumina_actual = 0.0f;
-            int anodos_actuales = shared_planta ? shared_planta->anodos_producidos : 0;
             float eco_stock = shared_planta ? shared_planta->alumina_enriquecida : 0.0f;
             if (shared_planta != nullptr) {
                 alumina_actual = shared_planta->tolvas_celdas[mi_estado.id_celda - 1];
             }
+            // Reportar carbón LOCAL de la celda (no el stock global de ánodos)
             log_csv_f3(consumida_enriquecida ? "REDUCCION_ENRIQUECIDA_OK" : "REDUCCION_OK", 
                        mi_estado.id_celda, mi_estado.temperatura_bano, alumina_actual, 
-                       (float)anodos_actuales, mi_estado.aluminio_producido, gases_actuales, eco_stock);
+                       mi_estado.anodo_carbon_kg, mi_estado.aluminio_producido, gases_actuales, eco_stock);
         } else {
             lock_guard<mutex> log_lock(candado_log_f3);
-            log_file << "[Celda #" << mi_estado.id_celda << "] FALTAN RECURSOS EN SHM (Ánodos o Alúmina).\n" << flush;
+            log_file << "[Celda #" << mi_estado.id_celda << "] FALTAN RECURSOS (Alúmina insuficiente o carbón agotado).\n" << flush;
 
             float alumina_actual = 0.0f;
             float gases_actuales = 0.0f;
-            int anodos_actuales = shared_planta ? shared_planta->anodos_producidos : 0;
             float eco_stock = shared_planta ? shared_planta->alumina_enriquecida : 0.0f;
             if (shared_planta != nullptr) {
                 alumina_actual = shared_planta->tolvas_celdas[mi_estado.id_celda - 1];
                 gases_actuales = shared_planta->gases_acumulados;
             }
+            // Reportar carbón LOCAL de la celda (no el stock global de ánodos)
             log_csv_f3("FALTA_RECURSOS", mi_estado.id_celda, mi_estado.temperatura_bano, 
-                       alumina_actual, (float)anodos_actuales, mi_estado.aluminio_producido, gases_actuales, eco_stock);
+                       alumina_actual, mi_estado.anodo_carbon_kg, mi_estado.aluminio_producido, gases_actuales, eco_stock);
         }
     }
 
@@ -139,12 +159,13 @@ namespace Industrial
         float eco_stock = shared_planta ? shared_planta->alumina_enriquecida : 0.0f;
         log_csv_f3("INICIADO", 0, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, eco_stock);
 
+        // anodo_carbon_kg inicia en 200.0f para coincidir con el estado inicial del frontend
         static vector<EstadoCelda> celdas = {
-            {1, 958.0f, 400.0f, 100.0f, 0.0f},
-            {2, 958.0f, 400.0f, 100.0f, 0.0f},
-            {3, 958.0f, 400.0f, 100.0f, 0.0f},
-            {4, 958.0f, 400.0f, 100.0f, 0.0f},
-            {5, 958.0f, 400.0f, 100.0f, 0.0f}
+            {1, 958.0f, 400.0f, 200.0f, 0.0f},
+            {2, 958.0f, 400.0f, 200.0f, 0.0f},
+            {3, 958.0f, 400.0f, 200.0f, 0.0f},
+            {4, 958.0f, 400.0f, 200.0f, 0.0f},
+            {5, 958.0f, 400.0f, 200.0f, 0.0f}
         };
 
         static mutex mtx_inventario_local;
