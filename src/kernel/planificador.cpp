@@ -82,24 +82,22 @@ bool MLFQScheduler::estaVacia(int numero_cola) {
 }
 
 void MLFQScheduler::ejecutarTurno(PCB* proceso, bool& termino_rafaga) {
-    // Definición del Quantum estricto para la Cola 1 (Round Robin)
+    // Definición del Quantum para la Cola 1 (Round Robin)
     const double time_slice = 10.0;
 
     // --- COLA 1: POLÍTICA ROUND ROBIN CON DEGRADACIÓN ---
     if (proceso->prioridad_actual == 1) {
         if (proceso->rafaga_estimada > time_slice) {
-            // El proceso consume todo el Quantum sin terminar su trabajo
             proceso->tiempo_ejecutado += time_slice;
             proceso->rafaga_estimada -= time_slice;
             termino_rafaga = false;
 
-            // Degradación: Al superar el time_slice, se penaliza re-encolándolo en la Cola 2 (SJF)
-            std::cout << "[MLFQ CPU] Proceso ID " << proceso->id 
-                      << " agotó su quantum en Cola 1. Degradando a Cola 2.\n";
+            std::cout << "[MLFQ] PID " << proceso->id
+                      << " (" << proceso->nombre_fase
+                      << ") agotó quantum → Cola 2.\n";
             encolarProceso(proceso, 2);
         } 
         else {
-            // El proceso termina dentro o justo en el límite del Quantum
             proceso->tiempo_ejecutado += proceso->rafaga_estimada;
             proceso->rafaga_estimada = 0.0;
             termino_rafaga = true;
@@ -107,7 +105,6 @@ void MLFQScheduler::ejecutarTurno(PCB* proceso, bool& termino_rafaga) {
     }
     // --- COLAS 2 Y 3: POLÍTICAS NO APROPIATIVAS (SJF / FCFS) ---
     else if (proceso->prioridad_actual == 2 || proceso->prioridad_actual == 3) {
-        // Al no estar limitadas por rodajas de tiempo, ejecutan toda su ráfaga restante de forma continua
         proceso->tiempo_ejecutado += proceso->rafaga_estimada;
         proceso->rafaga_estimada = 0.0;
         termino_rafaga = true;
@@ -168,31 +165,19 @@ void MLFQScheduler::runScheduler() {
 
 void MLFQScheduler::simularCPU(PCB* proceso) {
     // Transición de estado administrativo a EJECUTANDO
-    proceso->cambiarEstado(ProcessState::EJECUTANDO); //
+    proceso->cambiarEstado(ProcessState::EJECUTANDO);
 
-    std::cout << "\n=========================================================\n"
-              << "[KERNEL - DESPACHADOR]: Dispaching -> " << proceso->nombre_fase 
-              << " [ID: " << proceso->id << "] desde la COLA " << proceso->prioridad_actual << "\n"
-              << "=========================================================\n";
+    std::cout << "[MLFQ] Despachando: " << proceso->nombre_fase
+              << " [PID:" << proceso->id << "] Cola:" << proceso->prioridad_actual << "\n";
 
     bool termino_rafaga = false;
-    
-    // Invocar el método de ejecución y degradación temporal previamente programado
-    ejecutarTurno(proceso, termino_rafaga); //
+    ejecutarTurno(proceso, termino_rafaga);
 
-    // Evaluación post-ejecución del ciclo de vida
     if (!termino_rafaga) {
-        // Si no terminó su ráfaga total, significa que agotó su Quantum en Cola 1
-        // y el método 'ejecutarTurno' ya se encargó de degradarlo y re-encolarlo en la Cola 2.
-        std::cout << "[KERNEL - DESPACHADOR]: Proceso " << proceso->id 
-                  << " requiere más tiempo. Re-encolado en jerarquía inferior.\n";
+        std::cout << "[MLFQ] PID " << proceso->id << " pendiente → Cola 2.\n";
     } else {
-        // El proceso completó de forma exitosa su ciclo de ráfaga estimado
-        proceso->cambiarEstado(ProcessState::BLOQUEADO); // Transición de salida a espera de E/S o nuevo ciclo
-        std::cout << "[KERNEL - DESPACHADOR]: Proceso " << proceso->nombre_fase 
-                  << " [ID: " << proceso->id << "] completó su ráfaga de CPU virtual de forma exitosa.\n";
-        
-        // Imprimir log de auditoría final del PCB
-        proceso->imprimirLog(); //
+        proceso->cambiarEstado(ProcessState::BLOQUEADO);
+        std::cout << "[MLFQ] PID " << proceso->id
+                  << " (" << proceso->nombre_fase << ") ráfaga completa → BLOQUEADO.\n";
     }
 }

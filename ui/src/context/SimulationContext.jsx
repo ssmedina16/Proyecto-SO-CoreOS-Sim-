@@ -6,6 +6,11 @@ const INITIAL_CELLS = Array.from({ length: 5 }, (_, i) => ({
   id: i + 1, temp: 958, alumina: 400, carbon: 200, aluminio: 0,
 }));
 
+const INITIAL_CRUCIBLES = [
+  { id: 1, nivel: 0 },
+  { id: 2, nivel: 0 },
+];
+
 const INITIAL_STATE = {
   running: false,
   connected: false,
@@ -19,8 +24,15 @@ const INITIAL_STATE = {
   // Phase 3
   cells: INITIAL_CELLS, gases: 0,
   // Phase 4
-  gtcState: 'INACTIVO', capturedGas: 0, enrichedAlumina: 0,
+  gtcState: 'INACTIVO', capturedGas: 0,
+  enrichedAluminaProduced: 0,
+  enrichedAluminaStock: 0,
   phase4Events: [],
+  // Phase 5 & Ingot Casting
+  phase5State: 'INACTIVO',
+  crucibles: INITIAL_CRUCIBLES,
+  ingots: 0,
+  phase5Events: [],
 };
 
 export function SimulationProvider({ children }) {
@@ -97,9 +109,12 @@ export function SimulationProvider({ children }) {
         return upd;
       });
     } else if (phase === 3) {
-      const [, event, celda, temp, alumina, carbon, aluminio, gases] = p;
+      const [, event, celda, temp, alumina, carbon, aluminio, gases, ecoStock] = p;
       setState(s => {
         const upd = { ...s, gases: +gases };
+        if (ecoStock !== undefined && ecoStock !== '') {
+          upd.enrichedAluminaStock = +ecoStock;
+        }
         if (+celda > 0) {
           upd.cells = s.cells.map(c =>
             c.id === +celda ? { ...c, temp: +temp, alumina: +alumina, carbon: +carbon, aluminio: +aluminio } : c
@@ -108,16 +123,51 @@ export function SimulationProvider({ children }) {
         return upd;
       });
     } else if (phase === 4) {
-      const [, event, gasCap, alEnr] = p;
+      const [, event, gasCap, alEnr, alStock] = p;
       setState(s => {
         const upd = { ...s };
+        if (alStock !== undefined && alStock !== '') {
+          upd.enrichedAluminaStock = +alStock;
+        }
         if (event === 'CAPTURA_GASES') {
           upd.gtcState = 'CAPTURANDO';
           upd.capturedGas = s.capturedGas + +gasCap;
-          upd.enrichedAlumina = s.enrichedAlumina + +alEnr;
+          upd.enrichedAluminaProduced = (s.enrichedAluminaProduced || 0) + +alEnr;
           upd.phase4Events = [{ ts, gasCap: +gasCap, alEnr: +alEnr }, ...s.phase4Events.slice(0, 49)];
         } else if (event === 'INICIADO') upd.gtcState = 'MONITOREANDO';
         else if (event === 'FINALIZADO') upd.gtcState = 'DETENIDO';
+        return upd;
+      });
+    } else if (phase === 5) {
+      const [, event, crisolId, celdaId, kgTransferidos, crisol1Nivel, crisol2Nivel, lingotesTotales] = p;
+      setState(s => {
+        const upd = { ...s };
+        upd.crucibles = [
+          { id: 1, nivel: +crisol1Nivel },
+          { id: 2, nivel: +crisol2Nivel },
+        ];
+        if (lingotesTotales !== undefined) {
+          upd.ingots = +lingotesTotales;
+        }
+        if (event === 'VACIADO_CELDA') {
+          upd.phase5State = 'OPERANDO';
+          upd.phase5Events = [
+            { ts, crisolId: +crisolId, celdaId: +celdaId, kg: +kgTransferidos, tipo: 'vaciado' },
+            ...s.phase5Events.slice(0, 49),
+          ];
+        } else if (event === 'MOLDEO_LINGOTE') {
+          upd.phase5State = 'OPERANDO';
+          upd.phase5Events = [
+            { ts, crisolId: +crisolId, celdaId: 0, kg: +kgTransferidos, tipo: 'moldeo' },
+            ...s.phase5Events.slice(0, 49),
+          ];
+        } else if (event === 'DEADLOCK_PREVENIDO') {
+          upd.phase5Events = [
+            { ts, crisolId: +crisolId, celdaId: +celdaId, kg: 0, tipo: 'deadlock' },
+            ...s.phase5Events.slice(0, 49),
+          ];
+        } else if (event === 'INICIADO') upd.phase5State = 'OPERANDO';
+        else if (event === 'FINALIZADO') upd.phase5State = 'DETENIDO';
         return upd;
       });
     }

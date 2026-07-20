@@ -7,7 +7,8 @@ const CSV_FILES = [
   { filename: 'fase1_planta.csv',     phase: 1 },
   { filename: 'fase2_logistica.csv',  phase: 2 },
   { filename: 'fase3_reduccion.csv',  phase: 3 },
-  { filename: 'fase4_gtc.csv',       phase: 4 },
+  { filename: 'fase4_gtc.csv',        phase: 4 },
+  { filename: 'fase5_crisol.csv',     phase: 5 },
 ];
 
 /**

@@ -12,43 +12,55 @@ export class FileTailer {
     this.offset = 0;
     this.watcher = null;
     this.dirWatcher = null;
+    this.pollInterval = null;
   }
 
   start() {
     this.offset = 0;
-    try {
-      const stats = fs.statSync(this.filePath);
-      this.offset = stats.size;
-    } catch {
-      this.offset = 0;
-    }
 
     if (!fs.existsSync(this.filePath)) {
       this._watchParentDir();
     } else {
       this._watchFile();
     }
+
+    // High-frequency polling (50ms) guarantees immediate streaming of C++ output across WSL2/Windows boundaries
+    if (!this.pollInterval) {
+      this.pollInterval = setInterval(() => {
+        this._readNewContent();
+      }, 50);
+    }
   }
 
   _watchParentDir() {
     const parentDir = path.dirname(this.filePath);
     const baseName = path.basename(this.filePath);
-    this.dirWatcher = fs.watch(parentDir, (eventType, filename) => {
-      if (filename === baseName && fs.existsSync(this.filePath)) {
-        this.dirWatcher.close();
-        this.dirWatcher = null;
-        this._watchFile();
-        this._readNewContent();
-      }
-    });
+    try {
+      this.dirWatcher = fs.watch(parentDir, (eventType, filename) => {
+        if (filename === baseName && fs.existsSync(this.filePath)) {
+          if (this.dirWatcher) {
+            this.dirWatcher.close();
+            this.dirWatcher = null;
+          }
+          this._watchFile();
+          this._readNewContent();
+        }
+      });
+    } catch {
+      /* ignore watch creation errors */
+    }
   }
 
   _watchFile() {
-    this.watcher = fs.watch(this.filePath, (eventType) => {
-      if (eventType === 'change') {
-        this._readNewContent();
-      }
-    });
+    try {
+      this.watcher = fs.watch(this.filePath, (eventType) => {
+        if (eventType === 'change') {
+          this._readNewContent();
+        }
+      });
+    } catch {
+      /* ignore watch creation errors */
+    }
   }
 
   _readNewContent() {
@@ -71,13 +83,24 @@ export class FileTailer {
           this.onLine(line);
         }
       }
-    } catch (err) {
-      console.error(`[FileTailer] Error reading ${this.filePath}:`, err.message);
+    } catch {
+      // Ignore transient read errors during active writes
     }
   }
 
   stop() {
-    if (this.watcher) { this.watcher.close(); this.watcher = null; }
-    if (this.dirWatcher) { this.dirWatcher.close(); this.dirWatcher = null; }
+    if (this.pollInterval) {
+      clearInterval(this.pollInterval);
+      this.pollInterval = null;
+    }
+    if (this.watcher) {
+      this.watcher.close();
+      this.watcher = null;
+    }
+    if (this.dirWatcher) {
+      this.dirWatcher.close();
+      this.dirWatcher = null;
+    }
   }
 }
+

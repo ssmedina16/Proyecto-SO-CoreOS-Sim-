@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Flame, Truck, Layers, Wind } from 'lucide-react';
+import { LayoutDashboard, Flame, Truck, Layers, Wind, Container } from 'lucide-react';
 import { useSimCtx } from '../../context/SimulationContext';
 import StatusIndicator from '../common/StatusIndicator';
 
@@ -9,6 +9,7 @@ const tabs = [
   { to: '/fase-2',  label: 'Logística',  icon: Truck,           phaseKey: 'p2' },
   { to: '/fase-3',  label: 'Celdas',     icon: Layers,          phaseKey: 'p3' },
   { to: '/fase-4',  label: 'GTC',        icon: Wind,            phaseKey: 'p4' },
+  { to: '/fase-5',  label: 'Crisol',     icon: Container,       phaseKey: 'p5' },
 ];
 
 function getPhaseStatus(key, ctx) {
@@ -26,6 +27,10 @@ function getPhaseStatus(key, ctx) {
     case 'p4':
       if (ctx.gtcState === 'CAPTURANDO') return 'active';
       if (ctx.gtcState === 'MONITOREANDO') return 'warning';
+      return 'idle';
+    case 'p5':
+      if (ctx.phase5State === 'OPERANDO') return 'active';
+      if (ctx.phase5State === 'DETENIDO') return 'idle';
       return 'idle';
     default: return ctx.running ? 'active' : 'idle';
   }

@@ -41,26 +41,25 @@ static void log_csv_f1(const string &event, int pid, float coque, float brea, in
 }
 namespace Industrial {
     void Hilo_Mezcladora(Industrial::EstadoPlanta &estado) {
-        // Ejecuta un único ciclo de carga y preparación de masa por cada activación de CPU
         {
             lock_guard<mutex> lock(candado_planta);
             cout << "[Mezcladora - PID: " << estado.pid_proceso << "] Cargando materias primas...\n";
             log_csv_f1("MEZCLADORA_CARGANDO", estado.pid_proceso, estado.coque_kg, estado.brea_kg, estado.anodos_producidos);
         }
 
-        this_thread::sleep_for(chrono::milliseconds(400)); // Retardo de simulación de ráfaga
+        this_thread::sleep_for(chrono::milliseconds(150));
 
         {
             lock_guard<mutex> lock(candado_planta);
             cout << "[Mezcladora - PID: " << estado.pid_proceso << "] Masa preparada.\n\n";
             log_csv_f1("MEZCLADORA_LISTO", estado.pid_proceso, estado.coque_kg, estado.brea_kg, estado.anodos_producidos);
         }
-        this_thread::sleep_for(chrono::milliseconds(200));
+        this_thread::sleep_for(chrono::milliseconds(100));
     }
 
     void Hilo_Horno(Industrial::EstadoPlanta &estado) {
-        float coque_req = 50.0f;
-        float brea_req = 12.0f;
+        float coque_req = 40.0f;
+        float brea_req = 10.0f;
 
         if (estado.coque_kg >= coque_req && estado.brea_kg >= brea_req) {
             estado.coque_kg -= coque_req;
@@ -70,44 +69,47 @@ namespace Industrial {
                 lock_guard<mutex> lock(candado_planta);
                 cout << "[Horno - PID: " << estado.pid_proceso << "] [Materia Prima] Consumiendo coque y brea del inventario local para el ciclo térmico.\n";
                 cout << "[Horno - PID: " << estado.pid_proceso << "] Iniciando ciclo de cocción en horno (Espera activa de CPU virtual).\n";
-                log_csv_f1("HORNO_COCCION_INICIO", estado.pid_proceso, estado.coque_kg, estado.brea_kg, estado.anodos_producidos);
+                int total_shm_anodos = shared_planta ? shared_planta->anodos_producidos : estado.anodos_producidos;
+                log_csv_f1("HORNO_COCCION_INICIO", estado.pid_proceso, estado.coque_kg, estado.brea_kg, total_shm_anodos);
             }
 
-            this_thread::sleep_for(chrono::milliseconds(600)); // Tiempo de cocción por este cuanto
+            this_thread::sleep_for(chrono::milliseconds(150));
 
             if (shared_planta != nullptr) {
-                shared_planta->anodos_producidos++;
+                shared_planta->anodos_producidos += 4;
             }
-            estado.anodos_producidos++;
+            estado.anodos_producidos += 4;
+            int total_shm = shared_planta ? shared_planta->anodos_producidos : estado.anodos_producidos;
 
             {
                 lock_guard<mutex> lock(candado_planta);
                 cout << "---------------------------------------------------------\n";
-                cout << "[Horno - PID: " << estado.pid_proceso << "] [MEMORIA] ¡Ánodo Cocido generado con éxito! Inyectando recurso en RAM global. [Total SHM: " 
-                     << (shared_planta ? shared_planta->anodos_producidos : 0) << "]\n";
-                log_csv_f1("HORNO_ANODO_LISTO", estado.pid_proceso, estado.coque_kg, estado.brea_kg, estado.anodos_producidos);
+                cout << "[Horno - PID: " << estado.pid_proceso << "] [MEMORIA] ¡4 Ánodos Cocidos generados con éxito! Inyectando recursos en RAM global. [Total SHM: " 
+                     << total_shm << "]\n";
+                log_csv_f1("HORNO_ANODO_LISTO", estado.pid_proceso, estado.coque_kg, estado.brea_kg, total_shm);
             }
         } else {
             lock_guard<mutex> lock(candado_planta);
             cout << "[Horno - PID: " << estado.pid_proceso << "] FALTAN MATERIAS PRIMAS EN LA PLANTA DE CARBÓN. Reabasteciendo inventario local...\n";
-            log_csv_f1("HORNO_FALTA_RECURSOS", estado.pid_proceso, estado.coque_kg, estado.brea_kg, estado.anodos_producidos);
-            estado.coque_kg += 150.0f;
-            estado.brea_kg += 40.0f;
+            estado.coque_kg += 1000.0f;
+            estado.brea_kg += 300.0f;
+            int total_shm = shared_planta ? shared_planta->anodos_producidos : estado.anodos_producidos;
+            log_csv_f1("HORNO_FALTA_RECURSOS", estado.pid_proceso, estado.coque_kg, estado.brea_kg, total_shm);
         }
     }
 
     void fase_planta_carbon() {
-        // Usamos una variable estática para que el inventario local de la planta no se reinicie en cada turno
-        static EstadoPlanta mi_estado = { getpid(), 500.0f, 120.0f, 0 };
+        static EstadoPlanta mi_estado = { getpid(), 2000.0f, 500.0f, 0 };
+        int current_anodes = shared_planta ? shared_planta->anodos_producidos : mi_estado.anodos_producidos;
 
         cout << "\n>>> [PROCESO] INICIANDO FASE 1: PLANTA DE CARBÓN - PID: " << mi_estado.pid_proceso << " <<<\n\n";
-        log_csv_f1("INICIADO", mi_estado.pid_proceso, mi_estado.coque_kg, mi_estado.brea_kg, mi_estado.anodos_producidos);
+        log_csv_f1("INICIADO", mi_estado.pid_proceso, mi_estado.coque_kg, mi_estado.brea_kg, current_anodes);
 
-        // Corre de manera secuencial y ordenada un paso de producción y devuelve el control al Kernel
         Hilo_Mezcladora(mi_estado);
         Hilo_Horno(mi_estado);
 
+        current_anodes = shared_planta ? shared_planta->anodos_producidos : mi_estado.anodos_producidos;
         cout << "[Planta Carbón] Proceso finalizado.\n";
-        log_csv_f1("FINALIZADO", mi_estado.pid_proceso, mi_estado.coque_kg, mi_estado.brea_kg, mi_estado.anodos_producidos);
+        log_csv_f1("FINALIZADO", mi_estado.pid_proceso, mi_estado.coque_kg, mi_estado.brea_kg, current_anodes);
     }
 }
