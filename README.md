@@ -22,15 +22,15 @@ El sistema está diseñado de forma totalmente desacoplada en tres capas princip
 ┌─────────────────────────────▼─────────────────────────────┐
 │                 Node.js Sidecar Backend                   │
 └─────────────────────────────┬─────────────────────────────┘
-                              │ wsl make run / File Watcher
+                              │ make run (Docker/Linux)  ·  wsl make run (Windows)
 ┌─────────────────────────────▼─────────────────────────────┐
-│               Simulación C++ (WSL2 / POSIX)               │
+│         Simulación C++ (Docker / WSL2 / POSIX)            │
 └───────────────────────────────────────────────────────────┘
 ```
 
-1. **Simulador C++ (WSL2)**: Corre en un entorno Linux POSIX por el uso de `fork()`, señales y control de procesos. Escribe tanto logs legibles (`.log`) como datos estructurados en tiempo real (`.csv`).
-2. **Sidecar Backend (Windows)**: Servidor Node.js que:
-   - Controla el ciclo de vida de la simulación ejecutando la compilación y ejecución mediante `wsl make run`.
+1. **Simulador C++ (Docker o WSL2)**: Corre en un entorno Linux POSIX por el uso de `fork()`, señales y control de procesos. Escribe tanto logs legibles (`.log`) como datos estructurados en tiempo real (`.csv`). Puede ejecutarse de forma nativa dentro de un contenedor Docker **o** a través de WSL2 en Windows.
+2. **Sidecar Backend (Node.js)**: Servidor Node.js que:
+   - Detecta automáticamente el entorno de ejecución: usa `make run` en Linux/Docker o `wsl make run` en Windows.
    - Lee los archivos CSV en caliente y transmite las nuevas líneas en tiempo real mediante **WebSockets**.
 3. **React Frontend (Dashboard)**: Una interfaz moderna que divide las métricas en un dashboard general y pestañas independientes detalladas por fase de producción, incluyendo una consola virtual en vivo.
 
@@ -40,9 +40,12 @@ El sistema está diseñado de forma totalmente desacoplada en tres capas princip
 
 - `include/` y `src/`: Código fuente C++ de la simulación industrial.
 - `logs/`: Directorio de registros generado por la simulación (contiene archivos `.log` y `.csv`).
+- `Dockerfile`: Imagen Docker del proyecto (Node.js + `build-essential` para compilar C++ nativamente).
+- `docker-compose.yml`: Orquestación del contenedor con mapeo de puertos y volumen de logs.
+- `.dockerignore`: Exclusiones de la imagen (node_modules, binarios compilados, archivos de IDE).
 - `ui/`: Aplicación web completa.
   - `ui/server.js`: Entrypoint slim del servidor.
-  - `ui/server/`: Código modular del backend (rutas de Express y servicios de WebSocket, monitoreo de archivos y ejecución de WSL).
+  - `ui/server/`: Código modular del backend (rutas de Express y servicios de WebSocket, monitoreo de archivos y ejecución del simulador).
   - `ui/src/`: Código fuente de React.
     - `ui/src/context/`: `SimulationContext` (estado centralizado de la simulación, WS y parsing).
     - `ui/src/components/`: Componentes modulares visuales de cada fase, de navegación y consola.
@@ -56,14 +59,27 @@ El sistema está diseñado de forma totalmente desacoplada en tres capas princip
 
 De forma opcional, puedes definir:
 - `PORT`: El puerto de red en el que escuchará el servidor backend (ej. `PORT=8080`).
+- `IN_DOCKER`: Usada internamente por el servidor. Cuando su valor es `true`, el `SimulationManager` ejecuta `make run` de forma nativa en lugar de `wsl make run`. El `docker-compose.yml` la establece automáticamente; **no es necesario configurarla a mano**.
 
 ---
 
 ## Requisitos Previos
 
+### Opción A / B — Ejecución local con WSL2 (Windows)
+
 1. **Windows con WSL2**: Tener instalado WSL2 con una distribución de Linux (ej. Ubuntu).
-2. **Herramientas de Compilación en WSL2**: Asegúrate de tener `g++` y `make` instalados en tu WSL2 (`sudo apt update && sudo apt install build-essential`).
+2. **Herramientas de Compilación en WSL2**: Asegúrate de tener `g++` y `make` instalados en tu WSL2:
+   ```bash
+   wsl sudo apt update
+   wsl sudo apt install -y build-essential
+   ```
 3. **Node.js en Windows**: Tener Node.js instalado en tu sistema Windows (versión 18 o superior).
+
+### Opción C — Ejecución con Docker (Recomendado · Multiplataforma)
+
+1. **Docker Desktop**: Instalar [Docker Desktop](https://www.docker.com/products/docker-desktop/) en Windows, macOS o Linux.
+   - En Windows, Docker Desktop incluye su propio motor Linux; **no se requiere WSL2 configurado manualmente** ni tener `g++` instalado.
+2. **Sin dependencias adicionales**: El contenedor instala automáticamente `g++`, `make`, `Node.js` y las dependencias de npm durante la construcción.
 
 ---
 
@@ -114,3 +130,26 @@ Este modo te permite ver cambios de interfaz en tiempo real sin tener que compil
    *(Este servidor escuchará en el puerto `5173` y redirigirá de forma automática las peticiones de API y WebSockets al puerto `5000`)*.
 
 3. Abre tu navegador en **[http://localhost:5173](http://localhost:5173)**.
+
+---
+
+#### Opción C: Docker (Multiplataforma · Sin instalar g++ ni WSL2)
+
+Este modo empaqueta toda la aplicación (C++, Node.js y React) en un único contenedor Linux portable. Funciona en Windows, macOS y Linux sin configuración adicional.
+
+1. **Construir y levantar el contenedor** (solo necesitas tener Docker Desktop abierto):
+   ```bash
+   docker compose up --build
+   ```
+   Docker descargará la imagen base, instalará `build-essential`, compilará React y arrancará el servidor Express.
+
+2. Abre tu navegador web en **[http://localhost:5000](http://localhost:5000)**. Presiona **"Iniciar Simulación"** para ejecutar el simulador C++ de forma nativa dentro del contenedor y ver las métricas en tiempo real.
+
+3. Para detener el contenedor:
+   ```bash
+   docker compose down
+   ```
+
+> **Nota sobre los logs**: el directorio `logs/` del proyecto se monta como un volumen dentro del contenedor, por lo que los archivos `.csv` y `.log` generados por la simulación son accesibles directamente desde tu sistema de archivos local.
+
+> **Reconstruir después de cambios**: si modificas el código C++ (`src/`), el servidor (`ui/server/`) o instalas nuevas dependencias de npm, ejecuta `docker compose up --build` para reconstruir la imagen.

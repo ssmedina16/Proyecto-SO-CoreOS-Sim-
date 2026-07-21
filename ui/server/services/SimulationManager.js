@@ -3,6 +3,10 @@ import fs from 'fs';
 import path from 'path';
 import { FileTailer } from './FileTailer.js';
 
+// Detectar entorno: Docker / Linux nativo → usa make directamente
+// Windows sin Docker                     → usa wsl make (comportamiento original)
+const IS_LINUX_OR_DOCKER = process.env.IN_DOCKER === 'true' || process.platform === 'linux';
+
 const CSV_FILES = [
   { filename: 'fase1_planta.csv',     phase: 1 },
   { filename: 'fase2_logistica.csv',  phase: 2 },
@@ -28,7 +32,7 @@ export class SimulationManager {
     return this.process !== null;
   }
 
-  /** Start the simulation via WSL and begin tailing CSV outputs. */
+  /** Start the simulation (natively on Linux/Docker, via WSL2 on Windows). */
   start() {
     if (this.isRunning) {
       throw new Error('La simulación ya está corriendo.');
@@ -48,10 +52,14 @@ export class SimulationManager {
       try { fs.unlinkSync(fp); } catch { /* not found, ok */ }
     }
 
-    console.log('[SimulationManager] Starting C++ simulation via WSL2');
+    // Seleccionar comando según entorno
+    const command = IS_LINUX_OR_DOCKER ? 'make' : 'wsl';
+    const args    = IS_LINUX_OR_DOCKER ? ['run'] : ['make', 'run'];
+    console.log(`[SimulationManager] Entorno: ${IS_LINUX_OR_DOCKER ? 'Linux/Docker' : 'Windows/WSL2'}`);
+    console.log(`[SimulationManager] Arrancando simulación C++: ${command} ${args.join(' ')}`);
     this.broadcast({ type: 'sys', message: 'Compilando y arrancando simulación…' });
 
-    this.process = spawn('wsl', ['make', 'run'], { cwd: this.projectRoot });
+    this.process = spawn(command, args, { cwd: this.projectRoot });
 
     // Setup CSV tailers
     for (const { filename, phase } of CSV_FILES) {
@@ -88,7 +96,7 @@ export class SimulationManager {
     });
   }
 
-  /** Kill the running simulation. */
+  /** Kill the running simulation (natively on Linux/Docker, via WSL2 on Windows). */
   stop() {
     if (!this.isRunning) {
       throw new Error('No hay simulación en ejecución.');
@@ -97,7 +105,10 @@ export class SimulationManager {
     console.log('[SimulationManager] Stopping simulation');
     this.broadcast({ type: 'sys', message: 'Deteniendo simulación…' });
 
-    const killer = spawn('wsl', ['pkill', '-f', 'main']);
+    // Seleccionar comando según entorno
+    const killerCmd  = IS_LINUX_OR_DOCKER ? 'pkill'                  : 'wsl';
+    const killerArgs = IS_LINUX_OR_DOCKER ? ['-f', 'build/main']     : ['pkill', '-f', 'build/main'];
+    const killer = spawn(killerCmd, killerArgs);
     killer.on('close', () => {
       if (this.process) {
         this.process.kill();
