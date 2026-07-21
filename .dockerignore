@@ -1,0 +1,11 @@
+node_modules
+ui/node_modules
+ui/dist
+.git
+.gitignore
+logs/*.csv
+logs/*.log
+build/main
+*.o
+.vscode
+.idea
