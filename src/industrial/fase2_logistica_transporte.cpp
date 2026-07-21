@@ -65,6 +65,20 @@ namespace Industrial {
         }
 
         if (shared_planta != nullptr) {
+            // Auto-reabastecimiento del silo central de alúmina (Capacidad nominal: 50,000 kg; Umbral 20%: 10,000 kg)
+            if (shared_planta->silo_alumina < 10000.0f) {
+                float cantidad_reabastecida = 50000.0f - shared_planta->silo_alumina;
+                shared_planta->silo_alumina = 50000.0f;
+                {
+                    lock_guard<mutex> lg(candado_logistica);
+                    log_file << "[Logística] [AUTO-REABASTECIMIENTO] Nivel de silo crítico (< 20%). Inyectados "
+                             << cantidad_reabastecida << " kg. [Silo SHM: 50000 kg]\n"
+                             << "---------------------------------------------------------\n" << std::flush;
+                    cout << "[Logística] [AUTO-REABASTECIMIENTO] Silo de alúmina reabastecido al 100% (50000 kg).\n";
+                    log_csv_f2("REABASTECIMIENTO", 0, cantidad_reabastecida, shared_planta->silo_alumina);
+                }
+            }
+
             for (int i = 0; i < MAX_CELDAS; ++i) {
                 if (shared_planta->tolvas_celdas[i] < 500.0f) {
                     float nivel_actual = shared_planta->tolvas_celdas[i];

@@ -67,10 +67,12 @@ int main() {
         }
     });
 
-    // Duración de la simulación activa (90 segundos — suficiente para varios ciclos completos de todas las fases)
-    std::this_thread::sleep_for(std::chrono::seconds(90));
+    // Bucle infinito del simulador hasta recibir orden de detención manual (SIGINT/SIGTERM)
+    while (system_running) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
     
-    std::cout << "\n[Kernel]: Tiempo de simulación concluido. Solicitando apagado general de hilos...\n";
+    std::cout << "\n[Kernel]: Señal de detención recibida. Solicitando apagado general de hilos...\n";
     system_running = 0;
 
     // Unir todos los hilos de manera segura para evitar fugas de contexto
